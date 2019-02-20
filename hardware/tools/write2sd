@@ -1,0 +1,2 @@
+#!/bin/sh
+sudo dd iflag=dsync oflag=dsync if=smart210_1.0.bin of=/dev/sdb seek=1
