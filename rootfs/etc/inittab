@@ -1,0 +1,12 @@
+# /etc/inittab
+# This is run first except when booting in single-user mode.
+::sysinit:/etc/init.d/rcS
+# Note below that we prefix the shell commands with a "-" to indicate to the
+# shell that it is supposed to be a login shell
+# Start an "askfirst" shell on the console (whatever that may be)
+::askfirst:-/bin/sh
+# Start an "askfirst" shell on /dev/tty2
+#tty2::askfirst:-/bin/sh
+# Stuff to do before rebooting
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a –r

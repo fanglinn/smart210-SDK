@@ -768,22 +768,27 @@ static void __init smdkv210_machine_init(void)
 
 
 配置内核支持 nand
+
+```bash
 Device Drivers --->
 	<y> Memory Technology Device (MTD) support --->
 		<y> Caching block device access to MTD devices
 		<y> NAND Device Support ---> 
 
 ​			<*>   NAND Flash support for Samsung S3C SoCs
+```
 
 执行 make uImage 编译内核，下载到内存运行 
 
 ### 烧写内核到nand，并启动
 
+```bash
 nand erase.part kernel
 
 tftp 20000000 uImage
 
 nand write  20000000 60000 $filesize
+```
 
 启动参数bootcmd=nand read 20000000 60000 300000;bootm 20000000
 
@@ -829,5 +834,27 @@ Uncompressing Linux... done, booting the kernel.
 Booting Linux on physical CPU 0x0
 Linux version 3.10.79 (flinn@flinn) (gcc version 4.5.1 (ctng-1.8.1-FA) ) #7 PREEMPT Wed Feb 20 16:02:27 CST 2019
 ...
+```
+
+## 问题：
+
+VFS: Cannot open root device "mtdblock3" or unknown-block(31,3): error -19
+
+原因有两个
+
+1. u-boot分区和kernel分区不匹配
+
+2. 内核里面不支持当前文件系统（这里就是这个原因）
+
+   需要配置支持jffs文件系统：
+
+   
+
+```shell
+File systems  ---> 
+
+​	[*] Miscellaneous filesystems  --->
+
+​		<*>   Journalling Flash File System v2 (JFFS2) support
 ```
 
