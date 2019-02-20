@@ -65,7 +65,7 @@ int board_init(void)
 	//smc9115_pre_init();
 	dm9000_pre_init();
 
-	gd->bd->bi_arch_number = MACH_TYPE_SMDKC100;
+	gd->bd->bi_arch_number = MACH_TYPE_SMDKV210;
 	gd->bd->bi_boot_params = PHYS_SDRAM_1 + 0x100;
 
 	return 0;
