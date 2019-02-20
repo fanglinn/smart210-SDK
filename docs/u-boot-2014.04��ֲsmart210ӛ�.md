@@ -1268,7 +1268,7 @@ vim include/configs/smart210.h
 #define MTDIDS_DEFAULT          "nand0=s5p-nand"
 #define MTDPARTS_DEFAULT        "mtdparts=s5p-nand:256k(bootloader)"\
                                 ",128k@0x40000(params)"\
-                                ",3m@0x260000(kernel)"\
+                                ",3m@0x60000(kernel)"\
                                 ",-(rootfs)"
 
 ```
@@ -1345,4 +1345,8 @@ Unknown command 'onenand' - try 'help'
 Wrong Image Format for bootm command
 ERROR: can't get kernel image!
 ```
+
+
+
+
 

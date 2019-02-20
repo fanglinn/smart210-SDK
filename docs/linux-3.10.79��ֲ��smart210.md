@@ -382,6 +382,22 @@ Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(2,0)
 CPU: 0 PID: 1 Comm: swapper Not tainted 3.10.79 #6
 ```
 
+### nfs烧写
+
+```shell
+rootfs:
+fs-yaffs2:
+nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/rootfs.yaffs2
+nand erase.part rootfs
+nand write.yaffs 20000000 0x560000 139b9c0
+
+fs-jffs2
+nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/rootfs.jffs2
+nand erase.part rootfs
+nand write.jffs2 20000000 560000 $filesize
+set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 rootfstype=jffs2
+```
+
 
 
 ## Nand支持
@@ -677,18 +693,14 @@ static struct mtd_partition smdk_default_nand_part[] = {
 		.offset = MTDPART_OFS_APPEND,
 		.size	= SZ_128K,
 	},
+
 	[2] = {
-		.name	= "log",
-		.offset = MTDPART_OFS_APPEND,
-		.size	= SZ_2M,
-	},
-	[3] = {
 		.name	= "kernel",
 		.offset	= MTDPART_OFS_APPEND,
 		.size	= SZ_1M + SZ_2M,
 	},
 
-	[4] = {
+	[3] = {
 		.name	= "rootfs",
 		.offset = MTDPART_OFS_APPEND,
 		.size	= MTDPART_SIZ_FULL,
@@ -761,22 +773,24 @@ Device Drivers --->
 		<y> Caching block device access to MTD devices
 		<y> NAND Device Support ---> 
 
+​			<*>   NAND Flash support for Samsung S3C SoCs
+
 执行 make uImage 编译内核，下载到内存运行 
 
-烧写内核到nand，并启动
+### 烧写内核到nand，并启动
 
 nand erase.part kernel
 
 tftp 20000000 uImage
 
-nand write  20000000 260000 $filesize
+nand write  20000000 60000 $filesize
 
-启动参数bootcmd=nand read 20000000 260000 300000;bootm 20000000
+启动参数bootcmd=nand read 20000000 60000 300000;bootm 20000000
 
 或者
 
 ```shell
-set bootcmd "nand read 20000000 260000 300000;bootm 20000000"
+set bootcmd "nand read 20000000 60000 300000;bootm 20000000"
 ```
 
 
