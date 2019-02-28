@@ -485,6 +485,180 @@ static int s3c2412_nand_devready(struct mtd_info *mtd)
 /* ECC handling functions */
 
 #ifdef CONFIG_MTD_NAND_S3C2410_HWECC
+
+/*********************************************************************/
+static void s5pv210_nand_enable_hwecc(struct mtd_info *mtd, int mode)
+{
+	struct s3c2410_nand_info *info = s3c2410_nand_mtd_toinfo(mtd);
+	u32 cfg;
+	
+	if (mode == NAND_ECC_READ)
+	{
+		/* set 8/12/16bit Ecc direction to Encoding */
+		cfg = readl(info->regs + S5PV210_NFECCCONT) & (~(0x1 << 16));
+		writel(cfg, info->regs + S5PV210_NFECCCONT);
+		
+		/* clear 8/12/16bit ecc encode done */
+		cfg = readl(info->regs + S5PV210_NFECCSTAT) | (0x1 << 24);
+		writel(cfg, info->regs + S5PV210_NFECCSTAT);
+	}
+	else
+	{
+		/* set 8/12/16bit Ecc direction to Encoding */
+		cfg = readl(info->regs + S5PV210_NFECCCONT) | (0x1 << 16);
+		writel(cfg, info->regs + S5PV210_NFECCCONT);
+		
+		/* clear 8/12/16bit ecc encode done */
+		cfg = readl(info->regs + S5PV210_NFECCSTAT) | (0x1 << 25);
+		writel(cfg, info->regs + S5PV210_NFECCSTAT);
+	}
+	
+	/* Initialize main area ECC decoder/encoder */
+	cfg = readl(info->regs + S5PV210_NFCONT) | (0x1 << 5);
+	writel(cfg, info->regs + S5PV210_NFCONT);
+	
+	/* The ECC message size(For 512-byte message, you should set 511) 8-bit ECC/512B  */
+	writel((511 << 16) | 0x3, info->regs + S5PV210_NFECCCONF);
+			
+
+	/* Initialize main area ECC decoder/ encoder */
+	cfg = readl(info->regs + S5PV210_NFECCCONT) | (0x1 << 2);
+	writel(cfg, info->regs + S5PV210_NFECCCONT);
+	
+	/* Unlock Main area ECC   */
+	cfg = readl(info->regs + S5PV210_NFCONT) & (~(0x1 << 7));
+	writel(cfg, info->regs + S5PV210_NFCONT);
+}
+
+static int s5pv210_nand_calculate_ecc(struct mtd_info *mtd, const u_char *dat,
+				      u_char *ecc_calc)
+{
+	u32 cfg;
+	struct s3c2410_nand_info *info = s3c2410_nand_mtd_toinfo(mtd);
+	u32 nfeccprgecc0 = 0, nfeccprgecc1 = 0, nfeccprgecc2 = 0, nfeccprgecc3 = 0;
+	
+	/* Lock Main area ECC */
+	cfg = readl(info->regs + S5PV210_NFCONT) | (0x1 << 7);
+	writel(cfg, info->regs + S5PV210_NFCONT);
+	
+	if (ecc_calc)	/* NAND_ECC_WRITE */
+	{
+		/* ECC encoding is completed  */
+		while (!(readl(info->regs + S5PV210_NFECCSTAT) & (1 << 25)));
+			
+		/* 读取13 Byte的Ecc Code */
+		nfeccprgecc0 = readl(info->regs + S5PV210_NFECCPRGECC0);
+		nfeccprgecc1 = readl(info->regs + S5PV210_NFECCPRGECC1);
+		nfeccprgecc2 = readl(info->regs + S5PV210_NFECCPRGECC2);
+		nfeccprgecc3 = readl(info->regs + S5PV210_NFECCPRGECC3);
+
+		ecc_calc[0] = nfeccprgecc0 & 0xFF;
+		ecc_calc[1] = (nfeccprgecc0 >> 8) & 0xFF;
+		ecc_calc[2] = (nfeccprgecc0 >> 16) & 0xFF;
+		ecc_calc[3] = (nfeccprgecc0 >> 24) & 0xFF;
+		ecc_calc[4] = nfeccprgecc1 & 0xFF;
+		ecc_calc[5] = (nfeccprgecc1 >> 8) & 0xFF;
+		ecc_calc[6] = (nfeccprgecc1 >> 16) & 0xFF;
+		ecc_calc[7] = (nfeccprgecc1 >> 24) & 0xFF;
+		ecc_calc[8] = nfeccprgecc2 & 0xFF;
+		ecc_calc[9] = (nfeccprgecc2 >> 8) & 0xFF;
+		ecc_calc[10] = (nfeccprgecc2 >> 16) & 0xFF;
+		ecc_calc[11] = (nfeccprgecc2 >> 24) & 0xFF;
+		ecc_calc[12] = nfeccprgecc3 & 0xFF;
+	}
+	else	/* NAND_ECC_READ */
+	{
+		/* ECC decoding is completed  */
+		while (!(readl(info->regs + S5PV210_NFECCSTAT) & (1 << 24)));
+	}
+	return 0;
+}
+
+static int s5pv210_nand_correct_data(struct mtd_info *mtd, u_char *dat,
+				     u_char *read_ecc, u_char *calc_ecc)
+{
+	int ret = 0;
+	u32 errNo;
+	u32 erl0, erl1, erl2, erl3, erp0, erp1;
+	struct s3c2410_nand_info *info = s3c2410_nand_mtd_toinfo(mtd);
+
+	/* Wait until the 8-bit ECC decoding engine is Idle */
+	while (readl(info->regs + S5PV210_NFECCSTAT) & (1 << 31));
+	
+	errNo = readl(info->regs + S5PV210_NFECCSECSTAT) & 0x1F;
+	erl0 = readl(info->regs + S5PV210_NFECCERL0);
+	erl1 = readl(info->regs + S5PV210_NFECCERL1);
+	erl2 = readl(info->regs + S5PV210_NFECCERL2);
+	erl3 = readl(info->regs + S5PV210_NFECCERL3);
+	
+	erp0 = readl(info->regs + S5PV210_NFECCERP0);
+	erp1 = readl(info->regs + S5PV210_NFECCERP1);
+	
+	switch (errNo)
+	{
+	case 8:
+		dat[(erl3 >> 16) & 0x3FF] ^= (erp1 >> 24) & 0xFF;
+	case 7:
+		dat[erl3 & 0x3FF] ^= (erp1 >> 16) & 0xFF;
+	case 6:
+		dat[(erl2 >> 16) & 0x3FF] ^= (erp1 >> 8) & 0xFF;
+	case 5:
+		dat[erl2 & 0x3FF] ^= erp1 & 0xFF;
+	case 4:
+		dat[(erl1 >> 16) & 0x3FF] ^= (erp0 >> 24) & 0xFF;
+	case 3:
+		dat[erl1 & 0x3FF] ^= (erp0 >> 16) & 0xFF;
+	case 2:
+		dat[(erl0 >> 16) & 0x3FF] ^= (erp0 >> 8) & 0xFF;
+	case 1:
+		dat[erl0 & 0x3FF] ^= erp0 & 0xFF;
+	case 0:
+		break;
+	default:
+		ret = -1;
+		printk("ECC uncorrectable error detected:%d\n", errNo);
+		break;
+	}
+	
+	return ret;
+}
+
+static int s5pv210_nand_read_page_hwecc(struct mtd_info *mtd, struct nand_chip *chip,
+				uint8_t *buf, int oob_required, int page)				 
+{
+	int i, eccsize = chip->ecc.size;
+	int eccbytes = chip->ecc.bytes;
+	int eccsteps = chip->ecc.steps;
+	int col = 0;
+	int stat;
+	uint8_t *p = buf;
+	uint8_t *ecc_code = chip->buffers->ecccode;
+	uint32_t *eccpos = chip->ecc.layout->eccpos;
+
+	/* Read the OOB area first */
+	col = mtd->writesize;
+	chip->cmdfunc(mtd, NAND_CMD_RNDOUT, col, -1);
+	chip->read_buf(mtd, chip->oob_poi, mtd->oobsize);
+	
+	for (i = 0; i < chip->ecc.total; i++)
+		ecc_code[i] = chip->oob_poi[eccpos[i]];
+
+	for (i = 0, col = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize, col += eccsize)
+	{	
+		chip->cmdfunc(mtd, NAND_CMD_RNDOUT, col, -1);
+		chip->ecc.hwctl(mtd, NAND_ECC_READ);
+		chip->read_buf(mtd, p, eccsize);
+		chip->write_buf(mtd, ecc_code + i, eccbytes);
+		chip->ecc.calculate(mtd, NULL, NULL);
+		stat = chip->ecc.correct(mtd, p, NULL, NULL);
+		if (stat < 0)
+			mtd->ecc_stats.failed++;
+		else
+			mtd->ecc_stats.corrected += stat;
+	}
+	return 0;
+}
+/*********************************************************************/
 static int s3c2410_nand_correct_data(struct mtd_info *mtd, u_char *dat,
 				     u_char *read_ecc, u_char *calc_ecc)
 {
@@ -875,6 +1049,12 @@ static void s3c2410_nand_init_chip(struct s3c2410_nand_info *info,
 		chip->ecc.hwctl     = s3c2440_nand_enable_hwecc;
 		chip->ecc.calculate = s3c2440_nand_calculate_ecc;
 		break;
+	case TYPE_S5PV210:
+		chip->ecc.hwctl     = s5pv210_nand_enable_hwecc;
+		chip->ecc.calculate = s5pv210_nand_calculate_ecc;
+		chip->ecc.correct 	= s5pv210_nand_correct_data;
+		chip->ecc.read_page = s5pv210_nand_read_page_hwecc;
+		break;
 	}
 #else
 	chip->ecc.mode	    = NAND_ECC_SOFT;
@@ -936,8 +1116,8 @@ static void s3c2410_nand_update_chip(struct s3c2410_nand_info *info,
 		 * the large or small page nand device */
 
 	if (chip->page_shift > 10) {
-		chip->ecc.size	    = 256;
-		chip->ecc.bytes	    = 3;
+		chip->ecc.size	    = 512;  // fix by Flinn for 8-bit ECC
+		chip->ecc.bytes	    = 13;
 	} else {
 		chip->ecc.size	    = 512;
 		chip->ecc.bytes	    = 3;
