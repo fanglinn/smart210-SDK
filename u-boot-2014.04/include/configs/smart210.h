@@ -250,4 +250,10 @@
 #define CONFIG_SYS_NAND_ECCSIZE   512
 #define CONFIG_SYS_NAND_ECCBYTES 13
 
+/*
+* filesystem
+*/
+#define CONFIG_CMD_NAND_YAFFS
+
+
 #endif	/* __CONFIG_H */
