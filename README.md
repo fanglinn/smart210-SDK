@@ -55,6 +55,7 @@ make menuconfig
 	File systems  ---> 
 		[*] Miscellaneous filesystems  --->
 		<*>   Journalling Flash File System v2 (JFFS2) support
+		[*]YAFFS2 file system support
 make uImage
 ```
 
@@ -81,6 +82,18 @@ device nand0 <s5p-nand>, # parts = 4
 
 
 # 下载
+
+## SD
+
+### u-boot
+
+```bash
+sudo dd iflag=sync oflag=sync if=spl/smart210-spl.bin of=/dev/sdc seek=1
+sudo dd iflag=sync oflag=sync if=u-boot.bin of=/dev/sdc seek=32
+sync
+```
+
+
 
 ## tftp
 
@@ -119,10 +132,18 @@ bootm 20000000
 
 ### rootfs
 
-```
+```bash
+#fs.jffs2
 nand erase.part rootfs
 tftp 20000000 rootfs.jffs2
 nand write  20000000 360000 $filesize
+set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 rootfstype=jffs2
+
+#fs.yaffs
+nand erase.part rootfs
+tftp 20000000 rootfs.yaffs2
+nand write.yaffs 20000000 360000 $filesize
+set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 
 ```
 
 
@@ -156,7 +177,8 @@ rootfs:
 fs-yaffs2:
 nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/rootfs.yaffs2
 nand erase.part rootfs
-nand write.yaffs 20000000 360000 139b9c0
+nand write.yaffs 20000000 360000 $filesize
+set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 
 
 fs-jffs2
 nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/rootfs.jffs2
