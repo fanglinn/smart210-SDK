@@ -47,7 +47,7 @@ Starting kernel ...
 
 这是因为串口没有选择对
 
-```
+```bash
 make menuconfig
     System Type  ---> 
     	(0) S3C UART to use for low-level messages
@@ -838,7 +838,7 @@ Linux version 3.10.79 (flinn@flinn) (gcc version 4.5.1 (ctng-1.8.1-FA) ) #7 PREE
 
 ## 问题：
 
-VFS: Cannot open root device "mtdblock3" or unknown-block(31,3): error -19
+1. VFS: Cannot open root device "mtdblock3" or unknown-block(31,3): error -19
 
 原因有两个
 
@@ -856,5 +856,315 @@ File systems  --->
 ​	[*] Miscellaneous filesystems  --->
 
 ​		<*>   Journalling Flash File System v2 (JFFS2) support
+```
+
+2. NAND_ECC_NONE selected by board driver. This is not recommended!
+
+添加nand硬件ECC可以解决这个问题：
+
+在 mach-smdkv210.c 中添加头文件<linux/mtd/mtd.h> 
+
+vim arch/arm/mach-s5pv210/mach-smdkv210.c
+
+```c
+#include <linux/mtd/mtd.h>
+```
+
+添加 nand_ecclayout 定义 OOB 布局，同时赋值给 smdk_nand_sets， 设置 disable_ecc 属性为假 
+
+```c
+static struct nand_ecclayout nand_oob_64 = {
+	.eccbytes = 52,		/* 2048 / 512 * 13 */
+	.eccpos = {	12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+				22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+				32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 
+				42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+				52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+				62, 63},
+	/* 0和1用于保存坏块标记，12~63保存ecc，剩余2~11为free */
+	.oobfree = {
+			{.offset = 2,
+			.length = 10}
+		}
+};
+static struct s3c2410_nand_set smdk_nand_sets[] = {
+        [0] = {
+                .name           = "NAND",
+                .nr_chips       = 1,
+                .nr_partitions  = ARRAY_SIZE(smdk_default_nand_part),
+                .partitions     = smdk_default_nand_part,
+                .disable_ecc = 0,                   // 1 true, 0 false
+        },
+};
+```
+
+修改 NAND 驱动 drivers/mtd/nand/s3c2410.c，里面所用到的寄存器索引都在
+arch/arm/plat-samsung/include/plat/regs-nand.h 中定义 
+
+vim  drivers/mtd/nand/s3c2410.c
+
+```c
+#ifdef CONFIG_MTD_NAND_S3C2410_HWECC
+...
+// 仿照S3C2410
+static void s5pv210_nand_enable_hwecc(struct mtd_info *mtd, int mode)
+{
+	struct s3c2410_nand_info *info = s3c2410_nand_mtd_toinfo(mtd);
+	u32 cfg;
+	
+	if (mode == NAND_ECC_READ)
+	{
+		/* set 8/12/16bit Ecc direction to Encoding */
+		cfg = readl(info->regs + S5PV210_NFECCCONT) & (~(0x1 << 16));
+		writel(cfg, info->regs + S5PV210_NFECCCONT);
+		
+		/* clear 8/12/16bit ecc encode done */
+		cfg = readl(info->regs + S5PV210_NFECCSTAT) | (0x1 << 24);
+		writel(cfg, info->regs + S5PV210_NFECCSTAT);
+	}
+	else
+	{
+		/* set 8/12/16bit Ecc direction to Encoding */
+		cfg = readl(info->regs + S5PV210_NFECCCONT) | (0x1 << 16);
+		writel(cfg, info->regs + S5PV210_NFECCCONT);
+		
+		/* clear 8/12/16bit ecc encode done */
+		cfg = readl(info->regs + S5PV210_NFECCSTAT) | (0x1 << 25);
+		writel(cfg, info->regs + S5PV210_NFECCSTAT);
+	}
+	
+	/* Initialize main area ECC decoder/encoder */
+	cfg = readl(info->regs + S5PV210_NFCONT) | (0x1 << 5);
+	writel(cfg, info->regs + S5PV210_NFCONT);
+	
+	/* The ECC message size(For 512-byte message, you should set 511) 8-bit ECC/512B  */
+	writel((511 << 16) | 0x3, info->regs + S5PV210_NFECCCONF);
+			
+
+	/* Initialize main area ECC decoder/ encoder */
+	cfg = readl(info->regs + S5PV210_NFECCCONT) | (0x1 << 2);
+	writel(cfg, info->regs + S5PV210_NFECCCONT);
+	
+	/* Unlock Main area ECC   */
+	cfg = readl(info->regs + S5PV210_NFCONT) & (~(0x1 << 7));
+	writel(cfg, info->regs + S5PV210_NFCONT);
+}
+
+static int s5pv210_nand_calculate_ecc(struct mtd_info *mtd, const u_char *dat,
+				      u_char *ecc_calc)
+{
+	u32 cfg;
+	struct s3c2410_nand_info *info = s3c2410_nand_mtd_toinfo(mtd);
+	u32 nfeccprgecc0 = 0, nfeccprgecc1 = 0, nfeccprgecc2 = 0, nfeccprgecc3 = 0;
+	
+	/* Lock Main area ECC */
+	cfg = readl(info->regs + S5PV210_NFCONT) | (0x1 << 7);
+	writel(cfg, info->regs + S5PV210_NFCONT);
+	
+	if (ecc_calc)	/* NAND_ECC_WRITE */
+	{
+		/* ECC encoding is completed  */
+		while (!(readl(info->regs + S5PV210_NFECCSTAT) & (1 << 25)));
+			
+		/* 读取13 Byte的Ecc Code */
+		nfeccprgecc0 = readl(info->regs + S5PV210_NFECCPRGECC0);
+		nfeccprgecc1 = readl(info->regs + S5PV210_NFECCPRGECC1);
+		nfeccprgecc2 = readl(info->regs + S5PV210_NFECCPRGECC2);
+		nfeccprgecc3 = readl(info->regs + S5PV210_NFECCPRGECC3);
+
+		ecc_calc[0] = nfeccprgecc0 & 0xFF;
+		ecc_calc[1] = (nfeccprgecc0 >> 8) & 0xFF;
+		ecc_calc[2] = (nfeccprgecc0 >> 16) & 0xFF;
+		ecc_calc[3] = (nfeccprgecc0 >> 24) & 0xFF;
+		ecc_calc[4] = nfeccprgecc1 & 0xFF;
+		ecc_calc[5] = (nfeccprgecc1 >> 8) & 0xFF;
+		ecc_calc[6] = (nfeccprgecc1 >> 16) & 0xFF;
+		ecc_calc[7] = (nfeccprgecc1 >> 24) & 0xFF;
+		ecc_calc[8] = nfeccprgecc2 & 0xFF;
+		ecc_calc[9] = (nfeccprgecc2 >> 8) & 0xFF;
+		ecc_calc[10] = (nfeccprgecc2 >> 16) & 0xFF;
+		ecc_calc[11] = (nfeccprgecc2 >> 24) & 0xFF;
+		ecc_calc[12] = nfeccprgecc3 & 0xFF;
+	}
+	else	/* NAND_ECC_READ */
+	{
+		/* ECC decoding is completed  */
+		while (!(readl(info->regs + S5PV210_NFECCSTAT) & (1 << 24)));
+	}
+	return 0;
+}
+
+static int s5pv210_nand_correct_data(struct mtd_info *mtd, u_char *dat,
+				     u_char *read_ecc, u_char *calc_ecc)
+{
+	int ret = 0;
+	u32 errNo;
+	u32 erl0, erl1, erl2, erl3, erp0, erp1;
+	struct s3c2410_nand_info *info = s3c2410_nand_mtd_toinfo(mtd);
+
+	/* Wait until the 8-bit ECC decoding engine is Idle */
+	while (readl(info->regs + S5PV210_NFECCSTAT) & (1 << 31));
+	
+	errNo = readl(info->regs + S5PV210_NFECCSECSTAT) & 0x1F;
+	erl0 = readl(info->regs + S5PV210_NFECCERL0);
+	erl1 = readl(info->regs + S5PV210_NFECCERL1);
+	erl2 = readl(info->regs + S5PV210_NFECCERL2);
+	erl3 = readl(info->regs + S5PV210_NFECCERL3);
+	
+	erp0 = readl(info->regs + S5PV210_NFECCERP0);
+	erp1 = readl(info->regs + S5PV210_NFECCERP1);
+	
+	switch (errNo)
+	{
+	case 8:
+		dat[(erl3 >> 16) & 0x3FF] ^= (erp1 >> 24) & 0xFF;
+	case 7:
+		dat[erl3 & 0x3FF] ^= (erp1 >> 16) & 0xFF;
+	case 6:
+		dat[(erl2 >> 16) & 0x3FF] ^= (erp1 >> 8) & 0xFF;
+	case 5:
+		dat[erl2 & 0x3FF] ^= erp1 & 0xFF;
+	case 4:
+		dat[(erl1 >> 16) & 0x3FF] ^= (erp0 >> 24) & 0xFF;
+	case 3:
+		dat[erl1 & 0x3FF] ^= (erp0 >> 16) & 0xFF;
+	case 2:
+		dat[(erl0 >> 16) & 0x3FF] ^= (erp0 >> 8) & 0xFF;
+	case 1:
+		dat[erl0 & 0x3FF] ^= erp0 & 0xFF;
+	case 0:
+		break;
+	default:
+		ret = -1;
+		printk("ECC uncorrectable error detected:%d\n", errNo);
+		break;
+	}
+	
+	return ret;
+}
+
+static int s5pv210_nand_read_page_hwecc(struct mtd_info *mtd, struct nand_chip *chip,
+				uint8_t *buf, int oob_required, int page)				 
+{
+	int i, eccsize = chip->ecc.size;
+	int eccbytes = chip->ecc.bytes;
+	int eccsteps = chip->ecc.steps;
+	int col = 0;
+	int stat;
+	uint8_t *p = buf;
+	uint8_t *ecc_code = chip->buffers->ecccode;
+	uint32_t *eccpos = chip->ecc.layout->eccpos;
+
+	/* Read the OOB area first */
+	col = mtd->writesize;
+	chip->cmdfunc(mtd, NAND_CMD_RNDOUT, col, -1);
+	chip->read_buf(mtd, chip->oob_poi, mtd->oobsize);
+	
+	for (i = 0; i < chip->ecc.total; i++)
+		ecc_code[i] = chip->oob_poi[eccpos[i]];
+
+	for (i = 0, col = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize, col += eccsize)
+	{	
+		chip->cmdfunc(mtd, NAND_CMD_RNDOUT, col, -1);
+		chip->ecc.hwctl(mtd, NAND_ECC_READ);
+		chip->read_buf(mtd, p, eccsize);
+		chip->write_buf(mtd, ecc_code + i, eccbytes);
+		chip->ecc.calculate(mtd, NULL, NULL);
+		stat = chip->ecc.correct(mtd, p, NULL, NULL);
+		if (stat < 0)
+			mtd->ecc_stats.failed++;
+		else
+			mtd->ecc_stats.corrected += stat;
+	}
+	return 0;
+}
+#endif
+```
+
+
+
+```
+static void s3c2410_nand_init_chip(struct s3c2410_nand_info *info,
+                                   struct s3c2410_nand_mtd *nmtd,
+                                   struct s3c2410_nand_set *set)
+{
+    ...
+    #ifdef CONFIG_MTD_NAND_S3C2410_HWECC
+	case TYPE_S5PV210:
+		chip->ecc.hwctl     = s5pv210_nand_enable_hwecc;
+		chip->ecc.calculate = s5pv210_nand_calculate_ecc;
+		chip->ecc.correct 	= s5pv210_nand_correct_data;
+		chip->ecc.read_page = s5pv210_nand_read_page_hwecc;
+		break;
+	#endif
+}
+```
+
+```
+static void s3c2410_nand_update_chip(struct s3c2410_nand_info *info,
+				     struct s3c2410_nand_mtd *nmtd)
+{
+    ...
+    if (chip->page_shift > 10) {
+		chip->ecc.size	    = 512;	/* modied by Flinn for 8-bit ECC */
+		chip->ecc.bytes	    = 13;	/* modied by Flinn */
+	}
+}
+```
+
+配置：
+
+```bash
+Device Drivers --->
+	<*> Memory Technology Device (MTD) support --->
+		<*> NAND Device Support --->
+			[*] Samsung S3C NAND Hardware ECC
+```
+
+注意如果u-boot里面没有使用8-it 硬件ECC，这里会出现很多ECC错误。
+
+2. linux-3.10.79居然不支持YAFFS文件系统 ！！！！！！！
+
+## 支持YAFFS文件系统
+
+下载地址
+
+https://yaffs.net/get-yaffs
+
+```bash
+git clone git://www.aleph1.co.uk/yaffs2
+```
+
+```bash
+cd yaffs2/
+./patch-ker.sh c m ../linux-3.10.79/
+```
+
+然后在linux的源代码fs中多了一个yaffs2的文件夹
+
+执行make menuconfig来配置yaffs
+
+```bash
+File Systems
+	---> Miscellaneous filesystems
+		---> [*]YAFFS2 file system support
+```
+
+然后make uImage
+
+失败 ：fs/yaffs2/yaffs_vfs.c:3713:2: error: implicit declaration of function 'create_proc_entry
+
+原因是编译fs/yaffs2/yaffs_vfs.c时出现错误，function 'create_proc_entry'没有申明。Google之后才知道原来这个接口在linux-3.10被删除了，应该使用proc_create代替。
+
+参考：[What's coming in 3.10, part 2](https://lwn.net/Articles/549737/)
+
+修改fs/yaffs2/yaffs_vfs.c
+
+```c
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+#define YAFFS_NEW_PROCFS
+#include <linux/seq_file.h>
+#endif
 ```
 
