@@ -158,9 +158,26 @@ vim arch/arm/mach-s5pv210/mach-smdkv210.c
 static struct resource smdkv210_dm9000_resources[] = {
         [0] = DEFINE_RES_MEM(S5PV210_PA_SROM_BANK1, 4),
         [1] = DEFINE_RES_MEM(S5PV210_PA_SROM_BANK1 + 4, 4),
-        [2] = DEFINE_RES_NAMED(IRQ_EINT(10), 1, NULL, IORESOURCE_IRQ \
+        [2] = DEFINE_RES_NAMED(IRQ_EINT(7), 1, NULL, IORESOURCE_IRQ \
                                 | IORESOURCE_IRQ_HIGHLEVEL),
 };
+
+static void __init smdkv210_dm9000_init(void)
+{
+        unsigned int tmp;
+
+        gpio_request(S5PV210_MP01(1), "nCS1");
+        s3c_gpio_cfgpin(S5PV210_MP01(1), S3C_GPIO_SFN(2));
+        gpio_free(S5PV210_MP01(1));
+
+        tmp = (5 << S5P_SROM_BCX__TACC__SHIFT);
+        __raw_writel(tmp, S5P_SROM_BC1);
+
+        tmp = __raw_readl(S5P_SROM_BW);
+        tmp &= (S5P_SROM_BW__CS_MASK << S5P_SROM_BW__NCS1__SHIFT);
+        tmp |= (3 << S5P_SROM_BW__NCS1__SHIFT);
+        __raw_writel(tmp, S5P_SROM_BW);
+}
 ```
 
 此时不支持nand，所以配置nfs
