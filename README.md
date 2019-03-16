@@ -1,192 +1,155 @@
 # smart210-SDK
 smart210-SDK
 
-# 编译
+
 
 ## u-boot
 
-```
+### 编译：
+
+```bash
 make smart210_config
 make all
 ```
 
+### 烧录到SD卡：
 
-
-## kernel
-
-```bash
-make s5pv210_defconfig
-make menuconfig
-	System Type  ---> 
-    	(0) S3C UART to use for low-level messages
-    	S5PC110 Machines  --->
-    		// remove all
-    	S5PV210 Machines  --->
-    		[*] SMDKV210
-    ## 支持Nand
-   	Device Drivers --->
-	<y> Memory Technology Device (MTD) support --->
-		<y> Caching block device access to MTD devices
-		<y> NAND Device Support ---> 
-			<*>   NAND Flash support for Samsung S3C SoCs
-	## NFS
-	[*] Networking support  --->
-	     Networking options  --->
-	     	<*> Packet socket                                                                     
-			<*>   Packet: sockets monitoring interface                                           
-  			<*> Unix domain sockets                                                               
-  			<*>   UNIX: socket monitoring interface
-  			[*] TCP/IP networking   
-  			[*]   IP: multicasting                                                 
-      		[*]   IP: advanced router                                 
-  			[*]   IP: kernel level autoconfiguration
-  			[*]     IP: DHCP support                
-  			[*]     IP: BOOTP support               
-  			[*]     IP: RARP support
-	Device Drivers  --->
-		[*] Network device support --->
-        	[*] Ethernet driver support (NEW) --->
-        		<*> DM9000 support  #只保留dm9000，去掉其他
-    File systems --->
-        [*] Network File Systems (NEW) --->
-        	<*> NFS client support
-        	[*] Root file system on NFS
-	## JFFS2
-	File systems  ---> 
-		[*] Miscellaneous filesystems  --->
-		<*>   Journalling Flash File System v2 (JFFS2) support
-		[*]YAFFS2 file system support
-make uImage
-```
-
-## rootfs
-
-```bash
-mkfs.jffs2 -n -s 2048 -e 128KiB -d rootfs -o rootfs.jffs2	  
-mkyaffs2image rootfs rootfs.yaffs2
-```
-
-
-
-# 分区
-
-```bash
-device nand0 <s5p-nand>, # parts = 4
- #: name                size            offset          mask_flags
- 0: bootloader          0x00040000      0x00000000      0              # 256K
- 1: params              0x00020000      0x00040000      0              # 128K
- 2: kernel              0x00300000      0x00060000      0              # 3M
- 3: rootfs              0x3fca0000      0x00360000      0              # ~
-```
-
-
-
-# 下载
-
-## SD
-
-### u-boot
-
-```bash
+```shell
+#!/bin/bash
 sudo dd iflag=sync oflag=sync if=spl/smart210-spl.bin of=/dev/sdc seek=1
 sudo dd iflag=sync oflag=sync if=u-boot.bin of=/dev/sdc seek=32
 sync
+echo "done."
 ```
 
-
-
-## tftp
-
-### u-boot
+### 烧录到NAND
 
 ```bash
-nand erase.chip
+nand erase.part bootloader
 tftp 20000000 smart210-spl.bin
 nand write 20000000 0 $filesize
-
 tftp 20000000 u-boot.bin
 nand write 20000000 4000 $filesize
-
 ```
 
 
 
-### kernel
+### 修改分区：
+
+vim include/configs/smart210.h
+
+```c
+#define MTDPARTS_DEFAULT        "mtdparts=s5p-nand:256k(bootloader)"\
+                                ",128k(device_tree)"\
+                                ",128k(params)"\
+                                ",5m(kernel)"\
+                                ",-(rootfs)"
+
+#define CONFIG_ENV_SIZE                 (128 << 10)     /* 128KiB, 0x20000 */
+#define CONFIG_ENV_ADDR                 (384 << 10)     /* 384KiB(u-boot + device_tree), 0x60000 */
+#define CONFIG_ENV_OFFSET               (384 << 10)     /* 384KiB(u-boot + device_tree), 0x60000 */
+```
+
+修改启动参数：
+
+```
+#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x80000 0x500000;  bootm 0x30007FC0 "
+```
+
+set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200
+
+## kernel
+
+### 编译：
+
+```bash
+make s5pv210_defconfig
+make uImage
+```
+
+### 烧录
 
 ```bash
 nand erase.part kernel
 tftp 20000000 uImage
-nand write  20000000 60000 $filesize
-```
-
-set bootcmd "nand read 20000000 60000 300000;bootm 20000000"
-
-OR
-
-```bash
-tftp 20000000 uImage
-bootm 20000000
+nand write.yaffs  20000000 80000 $filesize
+nand write  20000000 80000 $filesize
+or
+nand erase.part kernel;tftp 20000000 uImage;nand write  20000000 80000 $filesize
 ```
 
 
 
-### rootfs
+### 修改分区
+
+对应与bootloader
+
+vim arch/arm/mach-s5pv210/mach-smdkv210.c
+
+```c
+/* nand info (add by Flinn) */
+static struct mtd_partition smdk_default_nand_part[] = {
+        [0] = {
+                .name   = "bootloader",
+                .size   = SZ_256K,
+                .offset = 0,
+        },
+        [1] = {
+                .name   = "device_tree",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = SZ_128K,
+        },
+        [2] = {
+                .name   = "params",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = SZ_128K,
+        },
+        [3] = {
+                .name   = "kernel",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = SZ_1M + SZ_4M,
+        },
+
+        [4] = {
+                .name   = "rootfs",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = MTDPART_SIZ_FULL,
+        }
+};
+```
+
+
+
+
+
+## rootfs
+
+注意：
+
+busybox不要采用高版本，使用busybox-1.7.0为宜。
+
+### 烧录
 
 ```bash
-#fs.jffs2
-nand erase.part rootfs
-tftp 20000000 rootfs.jffs2
-nand write  20000000 360000 $filesize
-set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 rootfstype=jffs2
-
-#fs.yaffs
-nand erase.part rootfs
 tftp 20000000 rootfs.yaffs2
-nand write.yaffs 20000000 360000 $filesize
-set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 
-```
-
-
-
-## nfs
-
-### u-boot
-
-```bash
-nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/u-boot-all.bin
-nand erase.part bootloader
-nand write.yaffs 20000000 0 $filesize
-```
-
-
-
-### kernel
-
-```bash
-nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/uImage
-nand erase.part kernel
-nand write.yaffs 20000000 60000 $filesize
-```
-
-
-
-### rootfs
-
-```bash
-rootfs:
-fs-yaffs2:
-nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/rootfs.yaffs2
 nand erase.part rootfs
-nand write.yaffs 20000000 360000 $filesize
-set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 
+nand write.yaffs 20000000 0x580000 $filesize
+```
 
-fs-jffs2
-nfs 20000000 192.168.10.136:/home/flinn/smart210-SDK/bin/rootfs.jffs2
+jffs2
+
+```bash
+tftp 20000000 rootfs.jffs2
 nand erase.part rootfs
-nand write.jffs2 20000000 360000 $filesize
-set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 rootfstype=jffs2
+nand write.jffs2 20000000 580000 $filesize
+set bootargs console=ttySAC0,115200 root=/dev/mtdblock4 rootfstype=jffs2
 ```
 
 
 
-#### 
+### nfs
+
+```bash
+set bootargs noinitrd root=/dev/nfs nfsroot=192.168.1.104:/home/flinn/work/rootfs/fs_mini_mdev  ip=192.168.1.123:192.168.1.104:192.168.1.1:255.255.255.0::eth0:off init=/linuxrc console=ttySAC0，115200
+```
+
