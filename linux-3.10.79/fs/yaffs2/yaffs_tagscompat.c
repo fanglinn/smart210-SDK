@@ -1,16 +1,14 @@
 /*
  * YAFFS: Yet Another Flash File System. A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- *
- * This file handles yaffs1-style tags to allow compatibility with Yaffs1 style
- * flash layouts.
  */
 
 #include "yaffs_guts.h"
@@ -18,12 +16,12 @@
 #include "yaffs_ecc.h"
 #include "yaffs_getblockinfo.h"
 #include "yaffs_trace.h"
-#include "yaffs_endian.h"
 
 static void yaffs_handle_rd_data_error(struct yaffs_dev *dev, int nand_chunk);
 
 
 /********** Tags ECC calculations  *********/
+
 
 void yaffs_calc_tags_ecc(struct yaffs_tags *tags)
 {
@@ -75,30 +73,21 @@ int yaffs_check_tags_ecc(struct yaffs_tags *tags)
 
 /********** Tags **********/
 
-/*
- * During tags storing/retireval we use a copy of the tags so that
- * we can modify the endian etc without damaging the previous structure.
- */
-static void yaffs_load_tags_to_spare(struct yaffs_dev *dev,
-				     struct yaffs_spare *spare_ptr,
+static void yaffs_load_tags_to_spare(struct yaffs_spare *spare_ptr,
 				     struct yaffs_tags *tags_ptr)
 {
-	union yaffs_tags_union *tu_ptr = (union yaffs_tags_union *)tags_ptr;
-	union yaffs_tags_union tags_stored = *tu_ptr;
+	union yaffs_tags_union *tu = (union yaffs_tags_union *)tags_ptr;
 
-	yaffs_calc_tags_ecc(&tags_stored.as_tags);
+	yaffs_calc_tags_ecc(tags_ptr);
 
-	yaffs_do_endian_u32(dev, &tags_stored.as_u32[0]);
-	yaffs_do_endian_u32(dev, &tags_stored.as_u32[1]);
-
-	spare_ptr->tb0 = tags_stored.as_bytes[0];
-	spare_ptr->tb1 = tags_stored.as_bytes[1];
-	spare_ptr->tb2 = tags_stored.as_bytes[2];
-	spare_ptr->tb3 = tags_stored.as_bytes[3];
-	spare_ptr->tb4 = tags_stored.as_bytes[4];
-	spare_ptr->tb5 = tags_stored.as_bytes[5];
-	spare_ptr->tb6 = tags_stored.as_bytes[6];
-	spare_ptr->tb7 = tags_stored.as_bytes[7];
+	spare_ptr->tb0 = tu->as_bytes[0];
+	spare_ptr->tb1 = tu->as_bytes[1];
+	spare_ptr->tb2 = tu->as_bytes[2];
+	spare_ptr->tb3 = tu->as_bytes[3];
+	spare_ptr->tb4 = tu->as_bytes[4];
+	spare_ptr->tb5 = tu->as_bytes[5];
+	spare_ptr->tb6 = tu->as_bytes[6];
+	spare_ptr->tb7 = tu->as_bytes[7];
 }
 
 static void yaffs_get_tags_from_spare(struct yaffs_dev *dev,
@@ -106,22 +95,16 @@ static void yaffs_get_tags_from_spare(struct yaffs_dev *dev,
 				      struct yaffs_tags *tags_ptr)
 {
 	union yaffs_tags_union *tu = (union yaffs_tags_union *)tags_ptr;
-	union yaffs_tags_union tags_stored;
 	int result;
 
-	tags_stored.as_bytes[0] = spare_ptr->tb0;
-	tags_stored.as_bytes[1] = spare_ptr->tb1;
-	tags_stored.as_bytes[2] = spare_ptr->tb2;
-	tags_stored.as_bytes[3] = spare_ptr->tb3;
-	tags_stored.as_bytes[4] = spare_ptr->tb4;
-	tags_stored.as_bytes[5] = spare_ptr->tb5;
-	tags_stored.as_bytes[6] = spare_ptr->tb6;
-	tags_stored.as_bytes[7] = spare_ptr->tb7;
-
-	yaffs_do_endian_u32(dev, &tags_stored.as_u32[0]);
-	yaffs_do_endian_u32(dev, &tags_stored.as_u32[1]);
-
-	*tu = tags_stored;
+	tu->as_bytes[0] = spare_ptr->tb0;
+	tu->as_bytes[1] = spare_ptr->tb1;
+	tu->as_bytes[2] = spare_ptr->tb2;
+	tu->as_bytes[3] = spare_ptr->tb3;
+	tu->as_bytes[4] = spare_ptr->tb4;
+	tu->as_bytes[5] = spare_ptr->tb5;
+	tu->as_bytes[6] = spare_ptr->tb6;
+	tu->as_bytes[7] = spare_ptr->tb7;
 
 	result = yaffs_check_tags_ecc(tags_ptr);
 	if (result > 0)
@@ -280,7 +263,7 @@ static int yaffs_tags_compat_wr(struct yaffs_dev *dev,
 			yaffs_ecc_calc(&data[256], spare.ecc2);
 		}
 
-		yaffs_load_tags_to_spare(dev, &spare, &tags);
+		yaffs_load_tags_to_spare(&spare, &tags);
 	}
 	return yaffs_wr_nand(dev, nand_chunk, data, &spare);
 }
@@ -320,7 +303,6 @@ static int yaffs_tags_compat_rd(struct yaffs_dev *dev,
 
 	if (ext_tags->chunk_used) {
 		yaffs_get_tags_from_spare(dev, &spare, &tags);
-
 		ext_tags->obj_id = tags.obj_id;
 		ext_tags->chunk_id = tags.chunk_id;
 		ext_tags->n_bytes = tags.n_bytes_lsb;

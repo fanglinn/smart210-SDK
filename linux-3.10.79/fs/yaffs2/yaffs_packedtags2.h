@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet another Flash File System . A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
@@ -33,18 +34,14 @@ struct yaffs_packed_tags2 {
 };
 
 /* Full packed tags with ECC, used for oob tags */
-void yaffs_pack_tags2(struct yaffs_dev *dev,
-		      struct yaffs_packed_tags2 *pt,
+void yaffs_pack_tags2(struct yaffs_packed_tags2 *pt,
 		      const struct yaffs_ext_tags *t, int tags_ecc);
-void yaffs_unpack_tags2(struct yaffs_dev *dev,
-			struct yaffs_ext_tags *t, struct yaffs_packed_tags2 *pt,
+void yaffs_unpack_tags2(struct yaffs_ext_tags *t, struct yaffs_packed_tags2 *pt,
 			int tags_ecc);
 
 /* Only the tags part (no ECC for use with inband tags */
-void yaffs_pack_tags2_tags_only(struct yaffs_dev *dev,
-				struct yaffs_packed_tags2_tags_only *pt,
+void yaffs_pack_tags2_tags_only(struct yaffs_packed_tags2_tags_only *pt,
 				const struct yaffs_ext_tags *t);
-void yaffs_unpack_tags2_tags_only(struct yaffs_dev *dev,
-				  struct yaffs_ext_tags *t,
+void yaffs_unpack_tags2_tags_only(struct yaffs_ext_tags *t,
 				  struct yaffs_packed_tags2_tags_only *pt);
 #endif

@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet Another Flash File System. A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
@@ -20,7 +21,6 @@
 #include "yaffs_verify.h"
 #include "yaffs_attribs.h"
 #include "yaffs_summary.h"
-#include "yaffs_endian.h"
 
 /*
  * Checkpoints are really no benefit on very small partitions.
@@ -41,7 +41,7 @@
  */
 void yaffs_calc_oldest_dirty_seq(struct yaffs_dev *dev)
 {
-	u32 i;
+	int i;
 	unsigned seq;
 	unsigned block_no = 0;
 	struct yaffs_block_info *b;
@@ -54,7 +54,7 @@ void yaffs_calc_oldest_dirty_seq(struct yaffs_dev *dev)
 	b = dev->block_info;
 	for (i = dev->internal_start_block; i <= dev->internal_end_block; i++) {
 		if (b->block_state == YAFFS_BLOCK_STATE_FULL &&
-		    (u32)(b->pages_in_use - b->soft_del_pages) <
+		    (b->pages_in_use - b->soft_del_pages) <
 		    dev->param.chunks_per_block &&
 		    b->seq_number < seq) {
 			seq = b->seq_number;
@@ -248,18 +248,6 @@ int yaffs_calc_checkpt_blocks_required(struct yaffs_dev *dev)
 
 /*--------------------- Checkpointing --------------------*/
 
-static void yaffs2_do_endian_validity_marker(struct yaffs_dev *dev,
-					     struct yaffs_checkpt_validity *v)
-{
-
-	if (!dev->swap_endian)
-		return;
-	v->struct_type = swap_s32(v->struct_type);
-	v->magic = swap_u32(v->magic);
-	v->version = swap_u32(v->version);
-	v->head = swap_u32(v->head);
-}
-
 static int yaffs2_wr_checkpt_validity_marker(struct yaffs_dev *dev, int head)
 {
 	struct yaffs_checkpt_validity cp;
@@ -271,8 +259,6 @@ static int yaffs2_wr_checkpt_validity_marker(struct yaffs_dev *dev, int head)
 	cp.version = YAFFS_CHECKPOINT_VERSION;
 	cp.head = (head) ? 1 : 0;
 
-	yaffs2_do_endian_validity_marker(dev, &cp);
-
 	return (yaffs2_checkpt_wr(dev, &cp, sizeof(cp)) == sizeof(cp)) ? 1 : 0;
 }
 
@@ -282,7 +268,6 @@ static int yaffs2_rd_checkpt_validity_marker(struct yaffs_dev *dev, int head)
 	int ok;
 
 	ok = (yaffs2_checkpt_rd(dev, &cp, sizeof(cp)) == sizeof(cp));
-	yaffs2_do_endian_validity_marker(dev, &cp);
 
 	if (ok)
 		ok = (cp.struct_type == sizeof(cp)) &&
@@ -295,8 +280,6 @@ static int yaffs2_rd_checkpt_validity_marker(struct yaffs_dev *dev, int head)
 static void yaffs2_dev_to_checkpt_dev(struct yaffs_checkpt_dev *cp,
 				      struct yaffs_dev *dev)
 {
-	cp->struct_type = sizeof(*cp);
-
 	cp->n_erased_blocks = dev->n_erased_blocks;
 	cp->alloc_block = dev->alloc_block;
 	cp->alloc_page = dev->alloc_page;
@@ -323,67 +306,30 @@ static void yaffs_checkpt_dev_to_dev(struct yaffs_dev *dev,
 	dev->seq_number = cp->seq_number;
 }
 
-static void yaffs2_do_endian_checkpt_dev(struct yaffs_dev *dev,
-				     struct yaffs_checkpt_dev *cp)
-{
-	if (!dev->swap_endian)
-		return;
-	cp->struct_type = swap_s32(cp->struct_type);
-	cp->n_erased_blocks = swap_s32(cp->n_erased_blocks);
-	cp->alloc_block = swap_s32(cp->alloc_block);
-	cp->alloc_page = swap_u32(cp->alloc_page);
-	cp->n_free_chunks = swap_s32(cp->n_free_chunks);
-	cp->n_deleted_files = swap_s32(cp->n_deleted_files);
-	cp->n_unlinked_files = swap_s32(cp->n_unlinked_files);
-	cp->n_bg_deletions = swap_s32(cp->n_bg_deletions);
-}
-
 static int yaffs2_wr_checkpt_dev(struct yaffs_dev *dev)
 {
 	struct yaffs_checkpt_dev cp;
 	u32 n_bytes;
 	u32 n_blocks = dev->internal_end_block - dev->internal_start_block + 1;
 	int ok;
-	u32 i;
-	union yaffs_block_info_union bu;
 
 	/* Write device runtime values */
 	yaffs2_dev_to_checkpt_dev(&cp, dev);
-	yaffs2_do_endian_checkpt_dev(dev, &cp);
+	cp.struct_type = sizeof(cp);
 
 	ok = (yaffs2_checkpt_wr(dev, &cp, sizeof(cp)) == sizeof(cp));
 	if (!ok)
 		return 0;
 
-	/* Write block info. */
-	if (!dev->swap_endian) {
-		n_bytes = n_blocks * sizeof(struct yaffs_block_info);
-		ok = (yaffs2_checkpt_wr(dev, dev->block_info, n_bytes) ==
-			(int)n_bytes);
-	} else {
-		/*
-		 * Need to swap the endianisms. We can't do this in place
-		 * since that would damage live data,
-		 * so write one block info at a time using a copy.
-		 */
-		for (i = 0; i < n_blocks && ok; i++) {
-			bu.bi = dev->block_info[i];
-			bu.as_u32[0] = swap_u32(bu.as_u32[0]);
-			bu.as_u32[1] = swap_u32(bu.as_u32[1]);
-			ok = (yaffs2_checkpt_wr(dev, &bu, sizeof(bu)) == sizeof(bu));
-		}
-	}
-
+	/* Write block info */
+	n_bytes = n_blocks * sizeof(struct yaffs_block_info);
+	ok = (yaffs2_checkpt_wr(dev, dev->block_info, n_bytes) == n_bytes);
 	if (!ok)
 		return 0;
 
-	/*
-	 * Write chunk bits. Chunk bits are in bytes so
-	 * no endian conversion is needed.
-	 */
+	/* Write chunk bits */
 	n_bytes = n_blocks * dev->chunk_bit_stride;
-	ok = (yaffs2_checkpt_wr(dev, dev->chunk_bits, n_bytes) ==
-		(int)n_bytes);
+	ok = (yaffs2_checkpt_wr(dev, dev->chunk_bits, n_bytes) == n_bytes);
 
 	return ok ? 1 : 0;
 }
@@ -399,7 +345,6 @@ static int yaffs2_rd_checkpt_dev(struct yaffs_dev *dev)
 	ok = (yaffs2_checkpt_rd(dev, &cp, sizeof(cp)) == sizeof(cp));
 	if (!ok)
 		return 0;
-	yaffs2_do_endian_checkpt_dev(dev, &cp);
 
 	if (cp.struct_type != sizeof(cp))
 		return 0;
@@ -408,54 +353,16 @@ static int yaffs2_rd_checkpt_dev(struct yaffs_dev *dev)
 
 	n_bytes = n_blocks * sizeof(struct yaffs_block_info);
 
-	ok = (yaffs2_checkpt_rd(dev, dev->block_info, n_bytes) ==
-		(int)n_bytes);
+	ok = (yaffs2_checkpt_rd(dev, dev->block_info, n_bytes) == n_bytes);
 
 	if (!ok)
 		return 0;
 
-	if (dev->swap_endian) {
-		/* The block info can just be handled as a list of u32s. */
-		u32 *as_u32 = (u32 *) dev->block_info;
-		u32 n_u32s = n_bytes/sizeof(u32);
-		u32 i;
-
-		for (i=0; i < n_u32s; i++)
-			as_u32[i] = swap_u32(as_u32[i]);
-	}
-
 	n_bytes = n_blocks * dev->chunk_bit_stride;
 
-	ok = (yaffs2_checkpt_rd(dev, dev->chunk_bits, n_bytes) ==
-		(int)n_bytes);
-
+	ok = (yaffs2_checkpt_rd(dev, dev->chunk_bits, n_bytes) == n_bytes);
 
 	return ok ? 1 : 0;
-}
-
-
-static void yaffs2_checkpt_obj_bit_assign(struct yaffs_checkpt_obj *cp,
-					  int bit_offset,
-					  int bit_width,
-					  u32 value)
-{
-	u32 and_mask;
-
-	and_mask = ((1<<bit_width)-1) << bit_offset;
-
-	cp->bit_field &= ~and_mask;
-	cp->bit_field |= ((value << bit_offset) & and_mask);
-}
-
-static u32 yaffs2_checkpt_obj_bit_get(struct yaffs_checkpt_obj *cp,
-				      int bit_offset,
-				      int bit_width)
-{
-	u32 and_mask;
-
-	and_mask = ((1<<bit_width)-1);
-
-	return (cp->bit_field >> bit_offset) & and_mask;
 }
 
 static void yaffs2_obj_checkpt_obj(struct yaffs_checkpt_obj *cp,
@@ -464,16 +371,14 @@ static void yaffs2_obj_checkpt_obj(struct yaffs_checkpt_obj *cp,
 	cp->obj_id = obj->obj_id;
 	cp->parent_id = (obj->parent) ? obj->parent->obj_id : 0;
 	cp->hdr_chunk = obj->hdr_chunk;
-
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_VARIANT_BITS, obj->variant_type);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_DELETED_BITS, obj->deleted);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_SOFT_DEL_BITS, obj->soft_del);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_UNLINKED_BITS, obj->unlinked);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_FAKE_BITS, obj->fake);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_RENAME_ALLOWED_BITS, obj->rename_allowed);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_UNLINK_ALLOWED_BITS, obj->unlink_allowed);
-	yaffs2_checkpt_obj_bit_assign(cp, CHECKPOINT_SERIAL_BITS, obj->serial);
-
+	cp->variant_type = obj->variant_type;
+	cp->deleted = obj->deleted;
+	cp->soft_del = obj->soft_del;
+	cp->unlinked = obj->unlinked;
+	cp->fake = obj->fake;
+	cp->rename_allowed = obj->rename_allowed;
+	cp->unlink_allowed = obj->unlink_allowed;
+	cp->serial = obj->serial;
 	cp->n_data_chunks = obj->n_data_chunks;
 
 	if (obj->variant_type == YAFFS_OBJECT_TYPE_FILE)
@@ -486,12 +391,11 @@ static int yaffs2_checkpt_obj_to_obj(struct yaffs_obj *obj,
 				     struct yaffs_checkpt_obj *cp)
 {
 	struct yaffs_obj *parent;
-	u32 cp_variant_type = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_VARIANT_BITS);
 
-	if (obj->variant_type != cp_variant_type) {
+	if (obj->variant_type != cp->variant_type) {
 		yaffs_trace(YAFFS_TRACE_ERROR,
 			"Checkpoint read object %d type %d chunk %d does not match existing object type %d",
-			cp->obj_id, cp_variant_type, cp->hdr_chunk,
+			cp->obj_id, cp->variant_type, cp->hdr_chunk,
 			obj->variant_type);
 		return 0;
 	}
@@ -510,7 +414,7 @@ static int yaffs2_checkpt_obj_to_obj(struct yaffs_obj *obj,
 			yaffs_trace(YAFFS_TRACE_ALWAYS,
 				"Checkpoint read object %d parent %d type %d chunk %d Parent type, %d, not directory",
 				cp->obj_id, cp->parent_id,
-				cp_variant_type, cp->hdr_chunk,
+				cp->variant_type, cp->hdr_chunk,
 				parent->variant_type);
 			return 0;
 		}
@@ -518,54 +422,24 @@ static int yaffs2_checkpt_obj_to_obj(struct yaffs_obj *obj,
 	}
 
 	obj->hdr_chunk = cp->hdr_chunk;
-
-	obj->variant_type = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_VARIANT_BITS);
-	obj->deleted = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_DELETED_BITS);
-	obj->soft_del = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_SOFT_DEL_BITS);
-	obj->unlinked = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_UNLINKED_BITS);
-	obj->fake = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_FAKE_BITS);
-	obj->rename_allowed = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_RENAME_ALLOWED_BITS);
-	obj->unlink_allowed = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_UNLINK_ALLOWED_BITS);
-	obj->serial = yaffs2_checkpt_obj_bit_get(cp, CHECKPOINT_SERIAL_BITS);
-
+	obj->variant_type = cp->variant_type;
+	obj->deleted = cp->deleted;
+	obj->soft_del = cp->soft_del;
+	obj->unlinked = cp->unlinked;
+	obj->fake = cp->fake;
+	obj->rename_allowed = cp->rename_allowed;
+	obj->unlink_allowed = cp->unlink_allowed;
+	obj->serial = cp->serial;
 	obj->n_data_chunks = cp->n_data_chunks;
 
-	if (obj->variant_type == YAFFS_OBJECT_TYPE_FILE) {
+	if (obj->variant_type == YAFFS_OBJECT_TYPE_FILE)
 		obj->variant.file_variant.file_size = cp->size_or_equiv_obj;
-		obj->variant.file_variant.stored_size = cp->size_or_equiv_obj;
-	} else if (obj->variant_type == YAFFS_OBJECT_TYPE_HARDLINK) {
+	else if (obj->variant_type == YAFFS_OBJECT_TYPE_HARDLINK)
 		obj->variant.hardlink_variant.equiv_id = cp->size_or_equiv_obj;
-	}
+
 	if (obj->hdr_chunk > 0)
 		obj->lazy_loaded = 1;
 	return 1;
-}
-
-static void yaffs2_do_endian_tnode(struct yaffs_dev *dev, struct yaffs_tnode *tn)
-{
-	int i;
-	u32 *as_u32 = (u32 *)tn;
-	int tnode_size_u32 = dev->tnode_size / sizeof(u32);
-
-	if (!dev->swap_endian)
-		return;
-	/* Swap all the tnode data as u32s to fix endianisms. */
-	for (i = 0; i<tnode_size_u32; i++)
-		as_u32[i] = swap_u32(as_u32[i]);
-}
-
-struct yaffs_tnode *yaffs2_do_endian_tnode_copy(struct yaffs_dev *dev,
-					       struct yaffs_tnode *tn)
-{
-	if (!dev->swap_endian)
-		return tn;
-
-	memcpy(dev->tn_swap_buffer, tn, dev->tnode_size);
-	tn = dev->tn_swap_buffer;
-
-	yaffs2_do_endian_tnode(dev, tn);
-
-	return tn;
 }
 
 static int yaffs2_checkpt_tnode_worker(struct yaffs_obj *in,
@@ -595,20 +469,12 @@ static int yaffs2_checkpt_tnode_worker(struct yaffs_obj *in,
 
 	/* Level 0 tnode */
 	base_offset = chunk_offset << YAFFS_TNODES_LEVEL0_BITS;
-	yaffs_do_endian_u32(dev, &base_offset);
-
 	ok = (yaffs2_checkpt_wr(dev, &base_offset, sizeof(base_offset)) ==
 			sizeof(base_offset));
-	if (ok) {
-		/*
-		 * NB Can't do an in-place endian swizzle since that would
-		 * damage current tnode data.
-		 * If a tnode endian conversion is required we do a copy.
-		 */
-		tn = yaffs2_do_endian_tnode_copy(dev, tn);
+	if (ok)
 		ok = (yaffs2_checkpt_wr(dev, tn, dev->tnode_size) ==
-			(int)dev->tnode_size);
-	}
+			dev->tnode_size);
+
 	return ok;
 }
 
@@ -643,18 +509,14 @@ static int yaffs2_rd_checkpt_tnodes(struct yaffs_obj *obj)
 	ok = (yaffs2_checkpt_rd(dev, &base_chunk, sizeof(base_chunk)) ==
 	      sizeof(base_chunk));
 
-	yaffs_do_endian_u32(dev, &base_chunk);
-
 	while (ok && (~base_chunk)) {
 		nread++;
 		/* Read level 0 tnode */
 
 		tn = yaffs_get_tnode(dev);
-		if (tn) {
+		if (tn)
 			ok = (yaffs2_checkpt_rd(dev, tn, dev->tnode_size) ==
-				(int)dev->tnode_size);
-			yaffs2_do_endian_tnode(dev, tn);
-		}
+				dev->tnode_size);
 		else
 			ok = 0;
 
@@ -663,13 +525,10 @@ static int yaffs2_rd_checkpt_tnodes(struct yaffs_obj *obj)
 						    file_stuct_ptr,
 						    base_chunk, tn) ? 1 : 0;
 
-		if (ok) {
+		if (ok)
 			ok = (yaffs2_checkpt_rd
 			      (dev, &base_chunk,
 			       sizeof(base_chunk)) == sizeof(base_chunk));
-			yaffs_do_endian_u32(dev, &base_chunk);
-		}
-
 	}
 
 	yaffs_trace(YAFFS_TRACE_CHECKPOINT,
@@ -679,21 +538,6 @@ static int yaffs2_rd_checkpt_tnodes(struct yaffs_obj *obj)
 	return ok ? 1 : 0;
 }
 
-
-static void yaffs2_do_endian_checkpt_obj(struct yaffs_dev *dev,
-					 struct yaffs_checkpt_obj *cp)
-{
-	if (!dev->swap_endian)
-		return;
-	cp->struct_type = swap_s32(cp->struct_type);
-	cp->obj_id = swap_u32(cp->obj_id);
-	cp->parent_id = swap_u32(cp->parent_id);
-	cp->hdr_chunk = swap_s32(cp->hdr_chunk);
-	cp->bit_field = swap_u32(cp->bit_field);
-	cp->n_data_chunks = swap_s32(cp->n_data_chunks);
-	cp->size_or_equiv_obj = swap_loff_t(cp->size_or_equiv_obj);
-}
-
 static int yaffs2_wr_checkpt_objs(struct yaffs_dev *dev)
 {
 	struct yaffs_obj *obj;
@@ -701,7 +545,6 @@ static int yaffs2_wr_checkpt_objs(struct yaffs_dev *dev)
 	int i;
 	int ok = 1;
 	struct list_head *lh;
-	u32 cp_variant_type;
 
 	/* Iterate through the objects in each hash entry,
 	 * dumping them to the checkpointing stream.
@@ -713,14 +556,12 @@ static int yaffs2_wr_checkpt_objs(struct yaffs_dev *dev)
 			if (!obj->defered_free) {
 				yaffs2_obj_checkpt_obj(&cp, obj);
 				cp.struct_type = sizeof(cp);
-				cp_variant_type = yaffs2_checkpt_obj_bit_get(
-						&cp, CHECKPOINT_VARIANT_BITS);
+
 				yaffs_trace(YAFFS_TRACE_CHECKPOINT,
 					"Checkpoint write object %d parent %d type %d chunk %d obj addr %p",
 					cp.obj_id, cp.parent_id,
-					cp_variant_type, cp.hdr_chunk, obj);
+					cp.variant_type, cp.hdr_chunk, obj);
 
-				yaffs2_do_endian_checkpt_obj (dev, &cp);
 				ok = (yaffs2_checkpt_wr(dev, &cp,
 						sizeof(cp)) == sizeof(cp));
 
@@ -735,7 +576,6 @@ static int yaffs2_wr_checkpt_objs(struct yaffs_dev *dev)
 	/* Dump end of list */
 	memset(&cp, 0xff, sizeof(struct yaffs_checkpt_obj));
 	cp.struct_type = sizeof(cp);
-	yaffs2_do_endian_checkpt_obj (dev, &cp);
 
 	if (ok)
 		ok = (yaffs2_checkpt_wr(dev, &cp, sizeof(cp)) == sizeof(cp));
@@ -749,14 +589,11 @@ static int yaffs2_rd_checkpt_objs(struct yaffs_dev *dev)
 	struct yaffs_checkpt_obj cp;
 	int ok = 1;
 	int done = 0;
-	u32 cp_variant_type;
 	LIST_HEAD(hard_list);
 
 
 	while (ok && !done) {
 		ok = (yaffs2_checkpt_rd(dev, &cp, sizeof(cp)) == sizeof(cp));
-		yaffs2_do_endian_checkpt_obj (dev, &cp);
-
 		if (cp.struct_type != sizeof(cp)) {
 			yaffs_trace(YAFFS_TRACE_CHECKPOINT,
 				"struct size %d instead of %d ok %d",
@@ -764,19 +601,17 @@ static int yaffs2_rd_checkpt_objs(struct yaffs_dev *dev)
 			ok = 0;
 		}
 
-		cp_variant_type = yaffs2_checkpt_obj_bit_get(
-						&cp, CHECKPOINT_VARIANT_BITS);
 		yaffs_trace(YAFFS_TRACE_CHECKPOINT,
 			"Checkpoint read object %d parent %d type %d chunk %d ",
-			cp.obj_id, cp.parent_id, cp_variant_type,
+			cp.obj_id, cp.parent_id, cp.variant_type,
 			cp.hdr_chunk);
 
-		if (ok && cp.obj_id == (u32)(~0)) {
+		if (ok && cp.obj_id == ~0) {
 			done = 1;
 		} else if (ok) {
 			obj =
 			    yaffs_find_or_create_by_number(dev, cp.obj_id,
-							   cp_variant_type);
+							   cp.variant_type);
 			if (obj) {
 				ok = yaffs2_checkpt_obj_to_obj(obj, &cp);
 				if (!ok)
@@ -807,8 +642,6 @@ static int yaffs2_wr_checkpt_sum(struct yaffs_dev *dev)
 
 	yaffs2_get_checkpt_sum(dev, &checkpt_sum);
 
-	yaffs_do_endian_u32(dev, &checkpt_sum);
-
 	ok = (yaffs2_checkpt_wr(dev, &checkpt_sum, sizeof(checkpt_sum)) ==
 		sizeof(checkpt_sum));
 
@@ -831,7 +664,6 @@ static int yaffs2_rd_checkpt_sum(struct yaffs_dev *dev)
 
 	if (!ok)
 		return 0;
-	yaffs_do_endian_u32(dev, &checkpt_sum1);
 
 	if (checkpt_sum0 != checkpt_sum1)
 		return 0;
@@ -996,10 +828,6 @@ int yaffs2_checkpt_restore(struct yaffs_dev *dev)
 	return retval;
 }
 
-/* End of checkpointing */
-
-/* Hole handling logic for truncate past end of file */
-
 int yaffs2_handle_hole(struct yaffs_obj *obj, loff_t new_size)
 {
 	/* if new_size > old_file_size.
@@ -1053,7 +881,7 @@ int yaffs2_handle_hole(struct yaffs_obj *obj, loff_t new_size)
 
 		while (increase > 0 && small_increase_ok) {
 			this_write = increase;
-			if (this_write > (int)dev->data_bytes_per_chunk)
+			if (this_write > dev->data_bytes_per_chunk)
 				this_write = dev->data_bytes_per_chunk;
 			written =
 			    yaffs_do_file_wr(obj, local_buffer, pos, this_write,
@@ -1083,8 +911,6 @@ int yaffs2_handle_hole(struct yaffs_obj *obj, loff_t new_size)
 
 	return result;
 }
-
-/* Yaffs2 scanning */
 
 struct yaffs_block_index {
 	int seq;
@@ -1139,9 +965,6 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 		dev->summary_used++;
 	}
 
-	if (result == YAFFS_FAIL)
-		yaffs_trace(YAFFS_TRACE_SCAN,
-				"Could not get tags for chunk %d\n", chunk);
 	/* Let's have a good look at this chunk... */
 
 	if (!tags.chunk_used) {
@@ -1245,9 +1068,9 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 			endpos = chunk_base + tags.n_bytes;
 
 			if (!in->valid &&
-			    in->variant.file_variant.stored_size < endpos) {
+			    in->variant.file_variant.scanned_size < endpos) {
 				in->variant.file_variant.
-				    stored_size = endpos;
+				    scanned_size = endpos;
 				in->variant.file_variant.
 				    file_size = endpos;
 			}
@@ -1298,8 +1121,6 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 
 			oh = (struct yaffs_obj_hdr *)chunk_data;
 
-			yaffs_do_endian_oh(dev, oh);
-
 			if (dev->param.inband_tags) {
 				/* Fix up the header if they got
 				 * corrupted by inband tags */
@@ -1337,10 +1158,10 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 				  tags.extra_obj_type == YAFFS_OBJECT_TYPE_FILE)
 				)) {
 				loff_t this_size = (oh) ?
-					yaffs_oh_to_size(dev, oh, 0) :
+					yaffs_oh_to_size(oh) :
 					tags.extra_file_size;
 				u32 parent_obj_id = (oh) ?
-					(u32)oh->parent_obj_id :
+					oh->parent_obj_id :
 					tags.extra_parent_id;
 
 				is_shrink = (oh) ?
@@ -1372,14 +1193,12 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 		}
 
 		if (!in->valid && in->variant_type !=
-		    (oh ? oh->type : tags.extra_obj_type)) {
+		    (oh ? oh->type : tags.extra_obj_type))
 			yaffs_trace(YAFFS_TRACE_ERROR,
-				"yaffs tragedy: Bad type, %d != %d, for object %d at chunk %d during scan",
+				"yaffs tragedy: Bad object type, %d != %d, for object %d at chunk %d during scan",
 				oh ? oh->type : tags.extra_obj_type,
 				in->variant_type, tags.obj_id,
 				chunk);
-			in = yaffs_retype_obj(in, oh ? oh->type : tags.extra_obj_type);
-		}
 
 		if (!in->valid &&
 		    (tags.obj_id == YAFFS_OBJECTID_ROOT ||
@@ -1414,7 +1233,7 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 				parent = yaffs_find_or_create_by_number(dev,
 						oh->parent_obj_id,
 						YAFFS_OBJECT_TYPE_DIRECTORY);
-				file_size = yaffs_oh_to_size(dev, oh, 0);
+				file_size = yaffs_oh_to_size(oh);
 				is_shrink = oh->is_shrink;
 				equiv_id = oh->equiv_id;
 			} else {
@@ -1478,7 +1297,7 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 				break;
 			case YAFFS_OBJECT_TYPE_FILE:
 				file_var = &in->variant.file_variant;
-				if (file_var->stored_size < file_size) {
+				if (file_var->scanned_size < file_size) {
 					/* This covers the case where the file
 					 * size is greater than the data held.
 					 * This will happen if the file is
@@ -1486,7 +1305,7 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 					 * current data extents.
 					 */
 					file_var->file_size = file_size;
-					file_var->stored_size = file_size;
+					file_var->scanned_size = file_size;
 				}
 
 				if (file_var->shrink_size > file_size)
@@ -1523,13 +1342,14 @@ static inline int yaffs2_scan_chunk(struct yaffs_dev *dev,
 
 int yaffs2_scan_backwards(struct yaffs_dev *dev)
 {
-	u32 blk;
+	int blk;
 	int block_iter;
 	int start_iter;
 	int end_iter;
 	int n_to_scan = 0;
 	enum yaffs_block_state state;
 	int c;
+	int deleted;
 	LIST_HEAD(hard_list);
 	struct yaffs_block_info *bi;
 	u32 seq_number;
@@ -1619,7 +1439,7 @@ int yaffs2_scan_backwards(struct yaffs_dev *dev)
 		bi++;
 	}
 
-	yaffs_trace(YAFFS_TRACE_ALWAYS, "%d blocks to be sorted...", n_to_scan);
+	yaffs_trace(YAFFS_TRACE_SCAN, "%d blocks to be sorted...", n_to_scan);
 
 	cond_resched();
 
@@ -1647,6 +1467,7 @@ int yaffs2_scan_backwards(struct yaffs_dev *dev)
 		/* get the block to scan in the correct order */
 		blk = block_index[block_iter].block;
 		bi = yaffs_get_block_info(dev, blk);
+		deleted = 0;
 
 		summary_available = yaffs_summary_read(dev, dev->sum_tags, blk);
 

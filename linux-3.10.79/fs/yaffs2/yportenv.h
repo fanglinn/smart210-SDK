@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet another Flash File System . A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
@@ -61,18 +62,10 @@
 #define YAFFS_LOSTNFOUND_MODE		0700
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 5, 0))
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0))
 #define Y_CURRENT_TIME CURRENT_TIME.tv_sec
-#else
-#define Y_CURRENT_TIME current_kernel_time().tv_sec
-#endif
 #define Y_TIME_CONVERT(x) (x).tv_sec
 #else
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0))
 #define Y_CURRENT_TIME CURRENT_TIME
-#else
-#define Y_CURRENT_TIME current_kernel_time()
-#endif
 #define Y_TIME_CONVERT(x) (x)
 #endif
 

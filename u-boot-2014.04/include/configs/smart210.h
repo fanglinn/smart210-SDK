@@ -89,8 +89,9 @@
 
 #define MTDIDS_DEFAULT          "nand0=s5p-nand"
 #define MTDPARTS_DEFAULT        "mtdparts=s5p-nand:256k(bootloader)"\
+				",128k(device_tree)"\
                                 ",128k(params)"\
-                                ",3m(kernel)"\
+                                ",5m(kernel)"\
                                 ",-(rootfs)"
 
 #define NORMAL_MTDPARTS_DEFAULT MTDPARTS_DEFAULT
@@ -205,8 +206,8 @@
 #define CONFIG_ENV_IS_IN_NAND		1
 
 #define CONFIG_ENV_SIZE			(128 << 10)	/* 128KiB, 0x20000 */
-#define CONFIG_ENV_ADDR			(256 << 10)	/* 256KiB, 0x40000 */
-#define CONFIG_ENV_OFFSET		(256 << 10)	/* 256KiB, 0x40000 */
+#define CONFIG_ENV_ADDR			(384 << 10)	/* 384KiB(u-boot + device_tree), 0x60000 */
+#define CONFIG_ENV_OFFSET		(384 << 10)	/* 384KiB(u-boot + device_tree), 0x60000 */
 
 #define CONFIG_USE_ONENAND_BOARD_INIT
 #define CONFIG_SAMSUNG_ONENAND		1
@@ -233,8 +234,8 @@
 #define DM9000_IO                               (CONFIG_DM9000_BASE)
 #define DM9000_DATA                             (CONFIG_DM9000_BASE + 0x4)
 #define CONFIG_CMD_PING
-#define CONFIG_IPADDR                   192.168.10.123
-#define CONFIG_SERVERIP                 192.168.10.119
+#define CONFIG_IPADDR                   192.168.1.123
+#define CONFIG_SERVERIP                 192.168.1.104
 #define CONFIG_ETHADDR                  1A:2A:3A:4A:5A:6A
 #endif /* CONFIG_CMD_NET */
 

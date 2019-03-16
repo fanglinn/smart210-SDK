@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet another Flash File System . A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
@@ -20,13 +21,13 @@
 #include "yaffs_guts.h"
 
 struct yaffs_packed_tags1 {
-	u32 chunk_id:20;
-	u32 serial_number:2;
-	u32 n_bytes:10;
-	u32 obj_id:18;
-	u32 ecc:12;
-	u32 deleted:1;
-	u32 unused_stuff:1;
+	unsigned chunk_id:20;
+	unsigned serial_number:2;
+	unsigned n_bytes:10;
+	unsigned obj_id:18;
+	unsigned ecc:12;
+	unsigned deleted:1;
+	unsigned unused_stuff:1;
 	unsigned should_be_ff;
 
 };

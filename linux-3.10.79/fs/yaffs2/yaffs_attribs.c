@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet Another Flash File System. A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
@@ -13,18 +14,6 @@
 #include "yaffs_guts.h"
 #include "yaffs_attribs.h"
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
-#define IATTR_UID ia_uid
-#define IATTR_GID ia_gid
-#else
-#define IATTR_UID ia_uid.val
-#define IATTR_GID ia_gid.val
-#endif
-
-/*
- * Loading attibs from/to object header assumes the object header
- * is in cpu endian.
- */
 void yaffs_load_attribs(struct yaffs_obj *obj, struct yaffs_obj_hdr *oh)
 {
 	obj->yst_uid = oh->yst_uid;
@@ -88,9 +77,9 @@ int yaffs_set_attribs(struct yaffs_obj *obj, struct iattr *attr)
 	if (valid & ATTR_MODE)
 		obj->yst_mode = attr->ia_mode;
 	if (valid & ATTR_UID)
-		obj->yst_uid = attr->IATTR_UID;
+		obj->yst_uid = attr->ia_uid;
 	if (valid & ATTR_GID)
-		obj->yst_gid = attr->IATTR_GID;
+		obj->yst_gid = attr->ia_gid;
 
 	if (valid & ATTR_ATIME)
 		obj->yst_atime = Y_TIME_CONVERT(attr->ia_atime);
@@ -114,9 +103,9 @@ int yaffs_get_attribs(struct yaffs_obj *obj, struct iattr *attr)
 
 	attr->ia_mode = obj->yst_mode;
 	valid |= ATTR_MODE;
-	attr->IATTR_UID = obj->yst_uid;
+	attr->ia_uid = obj->yst_uid;
 	valid |= ATTR_UID;
-	attr->IATTR_GID = obj->yst_gid;
+	attr->ia_gid = obj->yst_gid;
 	valid |= ATTR_GID;
 
 	Y_TIME_CONVERT(attr->ia_atime) = obj->yst_atime;

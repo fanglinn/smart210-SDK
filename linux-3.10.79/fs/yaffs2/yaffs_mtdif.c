@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet Another Flash File System. A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
@@ -17,21 +18,16 @@
 #include "linux/mtd/mtd.h"
 #include "linux/types.h"
 #include "linux/time.h"
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0))
 #include "linux/mtd/nand.h"
-#else
-#include "linux/mtd/rawnand.h"
-#endif
 #include "linux/kernel.h"
 #include "linux/version.h"
 #include "linux/types.h"
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
-#include "uapi/linux/major.h"
-#endif
 
 #include "yaffs_trace.h"
 #include "yaffs_guts.h"
 #include "yaffs_linux.h"
+
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0))
 #define MTD_OPS_AUTO_OOB MTD_OOB_AUTO
 #endif
@@ -45,25 +41,24 @@
 #define mtd_block_markbad(m, offs) (m)->block_markbad(m, offs)
 #endif
 
+
+
 int nandmtd_erase_block(struct yaffs_dev *dev, int block_no)
 {
 	struct mtd_info *mtd = yaffs_dev_to_mtd(dev);
-	u32 addr = ((loff_t) block_no) * dev->param.total_bytes_per_chunk *
-		dev->param.chunks_per_block;
+	u32 addr =
+	    ((loff_t) block_no) * dev->param.total_bytes_per_chunk *
+	    dev->param.chunks_per_block;
 	struct erase_info ei;
 	int retval = 0;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0))
 	ei.mtd = mtd;
-#endif
 	ei.addr = addr;
 	ei.len = dev->param.total_bytes_per_chunk * dev->param.chunks_per_block;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0))
 	ei.time = 1000;
 	ei.retries = 2;
 	ei.callback = NULL;
 	ei.priv = (u_long) dev;
-#endif
 
 	retval = mtd_erase(mtd, &ei);
 
@@ -73,9 +68,10 @@ int nandmtd_erase_block(struct yaffs_dev *dev, int block_no)
 	return YAFFS_FAIL;
 }
 
-static int yaffs_mtd_write(struct yaffs_dev *dev, int nand_chunk,
-			   const u8 *data, int data_len,
-			   const u8 *oob, int oob_len)
+
+static 	int yaffs_mtd_write(struct yaffs_dev *dev, int nand_chunk,
+				   const u8 *data, int data_len,
+				   const u8 *oob, int oob_len)
 {
 	struct mtd_info *mtd = yaffs_dev_to_mtd(dev);
 	loff_t addr;
@@ -83,8 +79,8 @@ static int yaffs_mtd_write(struct yaffs_dev *dev, int nand_chunk,
 	int retval;
 
 	yaffs_trace(YAFFS_TRACE_MTD,
-		"yaffs_mtd_write(%p, %d, %p, %d, %p, %d)\n",
-		dev, nand_chunk, data, data_len, oob, oob_len);
+			"yaffs_mtd_write(%p, %d, %p, %d, %p, %d)\n",
+			dev, nand_chunk, data, data_len, oob, oob_len);
 
 	if (!data || !data_len) {
 		data = NULL;
@@ -172,7 +168,7 @@ static int yaffs_mtd_read(struct yaffs_dev *dev, int nand_chunk,
 	return YAFFS_OK;
 }
 
-static int yaffs_mtd_erase(struct yaffs_dev *dev, int block_no)
+static 	int yaffs_mtd_erase(struct yaffs_dev *dev, int block_no)
 {
 	struct mtd_info *mtd = yaffs_dev_to_mtd(dev);
 
@@ -185,17 +181,13 @@ static int yaffs_mtd_erase(struct yaffs_dev *dev, int block_no)
 		     dev->param.chunks_per_block;
 	addr = ((loff_t) block_no) * block_size;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0))
 	ei.mtd = mtd;
-#endif
 	ei.addr = addr;
 	ei.len = block_size;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0))
 	ei.time = 1000;
 	ei.retries = 2;
 	ei.callback = NULL;
 	ei.priv = (u_long) dev;
-#endif
 
 	retval = mtd_erase(mtd, &ei);
 
@@ -239,6 +231,7 @@ static int yaffs_mtd_deinitialise(struct yaffs_dev *dev)
 	return YAFFS_OK;
 }
 
+
 void yaffs_mtd_drv_install(struct yaffs_dev *dev)
 {
 	struct yaffs_driver *drv = &dev->drv;
@@ -251,6 +244,7 @@ void yaffs_mtd_drv_install(struct yaffs_dev *dev)
 	drv->drv_initialise_fn = yaffs_mtd_initialise;
 	drv->drv_deinitialise_fn = yaffs_mtd_deinitialise;
 }
+
 
 struct mtd_info * yaffs_get_mtd_device(dev_t sdev)
 {
@@ -306,8 +300,9 @@ int yaffs_verify_mtd(struct mtd_info *mtd, int yaffs_version, int inband_tags)
 	return 0;
 }
 
+
 void yaffs_put_mtd_device(struct mtd_info *mtd)
 {
-	if (mtd)
+	if(mtd)
 		put_mtd_device(mtd);
 }

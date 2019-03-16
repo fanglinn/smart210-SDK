@@ -1,17 +1,14 @@
 /*
  * YAFFS: Yet Another Flash File System. A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- *
- * This file handles the marshalling (ie internal<-->external structure
- * translation between the internal tags and the stored tags in Yaffs2-style
- * tags storage.
  */
 
 #include "yaffs_guts.h"
@@ -46,9 +43,9 @@ static int yaffs_tags_marshall_write(struct yaffs_dev *dev,
 		    (struct yaffs_packed_tags2_tags_only *)(data +
 							dev->
 							data_bytes_per_chunk);
-		yaffs_pack_tags2_tags_only(dev, pt2tp, tags);
+		yaffs_pack_tags2_tags_only(pt2tp, tags);
 	} else {
-		yaffs_pack_tags2(dev, &pt, tags, !dev->param.no_tags_ecc);
+		yaffs_pack_tags2(&pt, tags, !dev->param.no_tags_ecc);
 	}
 
 	retval = dev->drv.drv_write_chunk_fn(dev, nand_chunk,
@@ -100,20 +97,17 @@ static int yaffs_tags_marshall_read(struct yaffs_dev *dev,
 		BUG();
 
 
-	if (retval == YAFFS_FAIL)
-		return YAFFS_FAIL;
-
 	if (dev->param.inband_tags) {
 		if (tags) {
 			struct yaffs_packed_tags2_tags_only *pt2tp;
 			pt2tp =
 				(struct yaffs_packed_tags2_tags_only *)
 				&data[dev->data_bytes_per_chunk];
-			yaffs_unpack_tags2_tags_only(dev, tags, pt2tp);
+			yaffs_unpack_tags2_tags_only(tags, pt2tp);
 		}
 	} else if (tags) {
 		memcpy(packed_tags_ptr, spare_buffer, packed_tags_size);
-		yaffs_unpack_tags2(dev, tags, &pt, !dev->param.no_tags_ecc);
+		yaffs_unpack_tags2(tags, &pt, !dev->param.no_tags_ecc);
 	}
 
 	if (local_data)
@@ -124,7 +118,7 @@ static int yaffs_tags_marshall_read(struct yaffs_dev *dev,
 		dev->n_ecc_unfixed++;
 	}
 
-	if (tags && ecc_result == YAFFS_ECC_RESULT_FIXED) {
+	if (tags && ecc_result == -YAFFS_ECC_RESULT_FIXED) {
 		if (tags->ecc_result <= YAFFS_ECC_RESULT_NO_ERROR)
 			tags->ecc_result = YAFFS_ECC_RESULT_FIXED;
 		dev->n_ecc_fixed++;

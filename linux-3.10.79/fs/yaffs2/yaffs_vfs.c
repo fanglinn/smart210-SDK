@@ -1,7 +1,8 @@
 /*
  * YAFFS: Yet Another Flash File System. A NAND-flash specific file system.
  *
- * Copyright (C) 2002-2018 Aleph One Ltd.
+ * Copyright (C) 2002-2011 Aleph One Ltd.
+ *   for Toby Churchill Ltd and Brightstar Engineering
  *
  * Created by Charles Manning <charles@aleph1.co.uk>
  * Acknowledgements:
@@ -35,9 +36,6 @@
  * for any version of Linux.
  */
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 16, 0))
-#include <linux/iversion.h>
-#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 10))
 #define YAFFS_COMPILE_BACKGROUND
@@ -58,8 +56,7 @@
 #define YAFFS_HAS_EVICT_INODE
 #endif
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 13)) && \
-    (LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0))
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 13))
 #define YAFFS_NEW_FOLLOW_LINK 1
 #else
 #define YAFFS_NEW_FOLLOW_LINK 0
@@ -112,10 +109,10 @@
 #include <linux/statfs.h>
 
 #define UnlockPage(p) unlock_page(p)
-#define Page_Uptodate(page) test_bit(PG_uptodate, &(page)->flags)
+#define Page_Uptodate(page)	test_bit(PG_uptodate, &(page)->flags)
 
 /* FIXME: use sb->s_id instead ? */
-#define yaffs_devname(sb, buf) bdevname(sb->s_bdev, buf)
+#define yaffs_devname(sb, buf)	bdevname(sb->s_bdev, buf)
 
 #else
 
@@ -133,15 +130,13 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26))
 #define YPROC_ROOT  (&proc_root)
 #else
-#define YPROC_ROOT NULL
+#define YPROC_ROOT  NULL
 #endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26))
 #define Y_INIT_TIMER(a)	init_timer(a)
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-#define Y_INIT_TIMER(a)	init_timer_on_stack(a)
 #else
-#define Y_INIT_TIMER(a,cb) timer_setup_on_stack(a,cb,0)
+#define Y_INIT_TIMER(a)	init_timer_on_stack(a)
 #endif
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 27))
@@ -177,12 +172,18 @@ static uint32_t YCALCBLOCKS(uint64_t partition_size, uint32_t block_size)
 #include "yaffs_trace.h"
 #include "yaffs_guts.h"
 #include "yaffs_attribs.h"
+
 #include "yaffs_linux.h"
+
 #include "yaffs_mtdif.h"
 #include "yaffs_packedtags2.h"
 #include "yaffs_getblockinfo.h"
 
-unsigned int yaffs_trace_mask = YAFFS_TRACE_BAD_BLOCKS | YAFFS_TRACE_ALWAYS | 0;
+unsigned int yaffs_trace_mask =
+		YAFFS_TRACE_BAD_BLOCKS |
+		YAFFS_TRACE_ALWAYS |
+		0;
+
 unsigned int yaffs_wr_attempts = YAFFS_WR_ATTEMPTS;
 unsigned int yaffs_auto_checkpoint = 1;
 unsigned int yaffs_gc_control = 1;
@@ -235,55 +236,10 @@ MODULE_PARM(yaffs_gc_control, "i");
 #define Y_CLEAR_INODE(i) end_writeback(i)
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
-#define YAFFS_USE_DIR_ITERATE
-#endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
-#define YAFFS_USE_XATTR
-#endif
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
-#define YAFFS_NEW_PROCFS
-#include <linux/seq_file.h>
-#endif
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
-#define PAGE_CACHE_SIZE PAGE_SIZE
-#define PAGE_CACHE_SHIFT PAGE_SHIFT
-#define Y_GET_DENTRY(f) ((f)->f_path.dentry)
-#define YAFFS_NEW_XATTR 1
-#define YAFFS_NEW_GET_LINK 1
-#else
-#define Y_GET_DENTRY(f) ((f)->f_dentry)
-#define YAFFS_NEW_XATTR 0
-#define YAFFS_NEW_GET_LINK 0
-#endif
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
-#define page_cache_release put_page
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0))
 #define update_dir_time(dir) do {\
-		(dir)->i_ctime = (dir)->i_mtime = CURRENT_TIME; \
-	} while (0)
-#elif (LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0))
-#define update_dir_time(dir) do {\
-		(dir)->i_ctime = (dir)->i_mtime = current_kernel_time(); \
-	} while (0)
-#else
-#define update_dir_time(dir) do {\
-		(dir)->i_ctime = (dir)->i_mtime = current_kernel_time64(); \
-	} while (0)
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
-static inline int setattr_prepare(struct dentry *dentry, struct iattr *attr)
-{
-	return inode_change_ok(dentry->d_inode, attr);
-}
-#endif
+			(dir)->i_ctime = (dir)->i_mtime = CURRENT_TIME; \
+		} while (0)
 
 static void yaffs_fill_inode_from_obj(struct inode *inode,
 				      struct yaffs_obj *obj);
@@ -310,15 +266,15 @@ static int yaffs_readpage_nolock(struct file *f, struct page *pg)
 	struct yaffs_obj *obj;
 	unsigned char *pg_buf;
 	int ret;
-	loff_t pos = ((loff_t) pg->index) << PAGE_SHIFT;
+	loff_t pos = ((loff_t) pg->index) << PAGE_CACHE_SHIFT;
 	struct yaffs_dev *dev;
 
 	yaffs_trace(YAFFS_TRACE_OS,
 		"yaffs_readpage_nolock at %lld, size %08x",
 		(long long)pos,
-		(unsigned)PAGE_SIZE);
+		(unsigned)PAGE_CACHE_SIZE);
 
-	obj = yaffs_dentry_to_obj(Y_GET_DENTRY(f));
+	obj = yaffs_dentry_to_obj(f->f_dentry);
 
 	dev = obj->my_dev;
 
@@ -516,7 +472,7 @@ static ssize_t yaffs_hold_space(struct file *f)
 
 	int n_free_chunks;
 
-	obj = yaffs_dentry_to_obj(Y_GET_DENTRY(f));
+	obj = yaffs_dentry_to_obj(f->f_dentry);
 
 	dev = obj->my_dev;
 
@@ -534,7 +490,7 @@ static void yaffs_release_space(struct file *f)
 	struct yaffs_obj *obj;
 	struct yaffs_dev *dev;
 
-	obj = yaffs_dentry_to_obj(Y_GET_DENTRY(f));
+	obj = yaffs_dentry_to_obj(f->f_dentry);
 
 	dev = obj->my_dev;
 
@@ -626,7 +582,7 @@ static ssize_t yaffs_file_write(struct file *f, const char *buf, size_t n,
 	struct inode *inode;
 	struct yaffs_dev *dev;
 
-	obj = yaffs_dentry_to_obj(Y_GET_DENTRY(f));
+	obj = yaffs_dentry_to_obj(f->f_dentry);
 
 	if (!obj) {
 		yaffs_trace(YAFFS_TRACE_OS,
@@ -638,7 +594,7 @@ static ssize_t yaffs_file_write(struct file *f, const char *buf, size_t n,
 
 	yaffs_gross_lock(dev);
 
-	inode = Y_GET_DENTRY(f)->d_inode;
+	inode = f->f_dentry->d_inode;
 
 	if (!S_ISBLK(inode->i_mode) && f->f_flags & O_APPEND)
 		ipos = inode->i_size;
@@ -762,7 +718,7 @@ static int yaffs_file_flush(struct file *file, fl_owner_t id)
 static int yaffs_file_flush(struct file *file)
 #endif
 {
-	struct yaffs_obj *obj = yaffs_dentry_to_obj(Y_GET_DENTRY(file));
+	struct yaffs_obj *obj = yaffs_dentry_to_obj(file->f_dentry);
 
 	struct yaffs_dev *dev = obj->my_dev;
 
@@ -773,7 +729,7 @@ static int yaffs_file_flush(struct file *file)
 
 	yaffs_gross_lock(dev);
 
-	yaffs_flush_file(obj, 1, 0, 0);
+	yaffs_flush_file(obj, 1, 0);
 
 	yaffs_gross_unlock(dev);
 
@@ -803,7 +759,7 @@ static int yaffs_sync_object(struct file *file, struct dentry *dentry,
 	yaffs_trace(YAFFS_TRACE_OS | YAFFS_TRACE_SYNC,
 		"yaffs_sync_object");
 	yaffs_gross_lock(dev);
-	yaffs_flush_file(obj, 1, datasync, 0);
+	yaffs_flush_file(obj, 1, datasync);
 	yaffs_gross_unlock(dev);
 	return 0;
 }
@@ -811,28 +767,15 @@ static int yaffs_sync_object(struct file *file, struct dentry *dentry,
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 22))
 static const struct file_operations yaffs_file_operations = {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
-	.read = new_sync_read,
-	.write = new_sync_write,
-#endif
-	.read_iter = generic_file_read_iter,
-	.write_iter = generic_file_write_iter,
-#else
 	.read = do_sync_read,
 	.write = do_sync_write,
 	.aio_read = generic_file_aio_read,
 	.aio_write = generic_file_aio_write,
-#endif
 	.mmap = generic_file_mmap,
 	.flush = yaffs_file_flush,
 	.fsync = yaffs_sync_object,
 	.splice_read = generic_file_splice_read,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
-	.splice_write = iter_file_splice_write,
-#else
 	.splice_write = generic_file_splice_write,
-#endif
 	.llseek = generic_file_llseek,
 };
 
@@ -917,7 +860,7 @@ static int yaffs_setattr(struct dentry *dentry, struct iattr *attr)
 #endif
 
 	if (error == 0)
-		error = setattr_prepare(dentry, attr);
+		error = inode_change_ok(inode, attr);
 	if (error == 0) {
 		int result;
 		if (!error) {
@@ -951,17 +894,10 @@ static int yaffs_setattr(struct dentry *dentry, struct iattr *attr)
 	return error;
 }
 
-#ifdef YAFFS_USE_XATTR
-#if (YAFFS_NEW_XATTR > 0)
-static int yaffs_setxattr(struct dentry *dentry, struct inode *inode,
-		const char *name, const void *value, size_t size, int flags)
-{
-#else
 static int yaffs_setxattr(struct dentry *dentry, const char *name,
 		   const void *value, size_t size, int flags)
 {
 	struct inode *inode = dentry->d_inode;
-#endif
 	int error = 0;
 	struct yaffs_dev *dev;
 	struct yaffs_obj *obj = yaffs_inode_to_obj(inode);
@@ -985,16 +921,10 @@ static int yaffs_setxattr(struct dentry *dentry, const char *name,
 	return error;
 }
 
-#if (YAFFS_NEW_XATTR > 0)
-static ssize_t yaffs_getxattr(struct dentry * dentry, struct inode *inode,
-	const char *name, void *buff, size_t size)
-{
-#else
 static ssize_t yaffs_getxattr(struct dentry * dentry, const char *name,
 			void *buff, size_t size)
 {
 	struct inode *inode = dentry->d_inode;
-#endif
 	int error = 0;
 	struct yaffs_dev *dev;
 	struct yaffs_obj *obj = yaffs_inode_to_obj(inode);
@@ -1042,7 +972,6 @@ static int yaffs_removexattr(struct dentry *dentry, const char *name)
 
 	return error;
 }
-#endif
 
 static ssize_t yaffs_listxattr(struct dentry * dentry, char *buff, size_t size)
 {
@@ -1070,12 +999,10 @@ static ssize_t yaffs_listxattr(struct dentry * dentry, char *buff, size_t size)
 
 static const struct inode_operations yaffs_file_inode_operations = {
 	.setattr = yaffs_setattr,
-#ifdef YAFFS_USE_XATTR
 	.setxattr = yaffs_setxattr,
 	.getxattr = yaffs_getxattr,
-	.removexattr = yaffs_removexattr,
-#endif
 	.listxattr = yaffs_listxattr,
+	.removexattr = yaffs_removexattr,
 };
 
 
@@ -1096,16 +1023,11 @@ static int yaffs_readlink(struct dentry *dentry, char __user * buffer,
 	if (!alias)
 		return -ENOMEM;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)
 	ret = vfs_readlink(dentry, buffer, buflen, alias);
-#else
-	ret = readlink_copy(buffer, buflen, alias);
-#endif
 	kfree(alias);
 	return ret;
 }
 
-#if (YAFFS_NEW_GET_LINK == 0)
 #if (YAFFS_NEW_FOLLOW_LINK == 1)
 static void *yaffs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
@@ -1144,28 +1066,7 @@ out:
 	return ret;
 #endif
 }
-#else
-static const char *yaffs_get_link(struct dentry *dentry, struct inode *inode, struct delayed_call *done)
-{
-	unsigned char *alias;
-	struct yaffs_dev *dev;
 
-	if (!dentry)
-		return ERR_PTR(-ECHILD);
-
-	dev = yaffs_dentry_to_obj(dentry)->my_dev;
-
-	yaffs_gross_lock(dev);
-
-	alias = yaffs_get_symlink_alias(yaffs_dentry_to_obj(dentry));
-	yaffs_gross_unlock(dev);
-
-	if (!alias)
-		return ERR_PTR(-ENOMEM);
-	set_delayed_call(done, kfree_link, alias);
-	return alias;
-}
-#endif
 
 #ifdef YAFFS_HAS_PUT_INODE
 
@@ -1190,21 +1091,15 @@ void yaffs_put_link(struct dentry *dentry, struct nameidata *nd, void *alias)
 
 static const struct inode_operations yaffs_symlink_inode_operations = {
 	.readlink = yaffs_readlink,
-#if (YAFFS_NEW_GET_LINK == 1)
-	.get_link = yaffs_get_link,
-#else
 	.follow_link = yaffs_follow_link,
-#endif
 #if (YAFFS_NEW_FOLLOW_LINK == 1)
 	.put_link = yaffs_put_link,
 #endif
 	.setattr = yaffs_setattr,
-#ifdef YAFFS_USE_XATTR
 	.setxattr = yaffs_setxattr,
 	.getxattr = yaffs_getxattr,
-	.removexattr = yaffs_removexattr,
-#endif
 	.listxattr = yaffs_listxattr,
+	.removexattr = yaffs_removexattr,
 };
 
 #ifdef YAFFS_USE_OWN_IGET
@@ -1311,23 +1206,6 @@ struct inode *yaffs_get_inode(struct super_block *sb, int mode, int dev,
 #define YCRED(x) (x->cred)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-#define YPROC_uid(p) (YCRED(p)->fsuid)
-#define YPROC_gid(p) (YCRED(p)->fsgid)
-#define EXTRACT_gid(x) x
-#define EXTRACT_uid(x) x
-#define MAKE_gid(x) x
-#define MAKE_uid(x) x
-#else
-#define YPROC_uid(p) from_kuid(&init_user_ns, YCRED(p)->fsuid)
-#define YPROC_gid(p) from_kgid(&init_user_ns, YCRED(p)->fsgid)
-#define EXTRACT_gid(x) from_kgid(&init_user_ns, x)
-#define EXTRACT_uid(x) from_kuid(&init_user_ns, x)
-#define MAKE_gid(x) make_kgid(&init_user_ns, x)
-#define MAKE_uid(x) make_kuid(&init_user_ns, x)
-#endif
-
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0))
 static int yaffs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 		       dev_t rdev)
@@ -1347,9 +1225,9 @@ static int yaffs_mknod(struct inode *dir, struct dentry *dentry, int mode,
 	struct yaffs_obj *parent = yaffs_inode_to_obj(dir);
 
 	int error = -ENOSPC;
-	uid_t uid = YPROC_uid(current);
+	uid_t uid = YCRED(current)->fsuid;
 	gid_t gid =
-	    (dir->i_mode & S_ISGID) ? EXTRACT_gid(dir->i_gid) : YPROC_gid(current);
+	    (dir->i_mode & S_ISGID) ? dir->i_gid : YCRED(current)->fsgid;
 
 	if ((dir->i_mode & S_ISGID) && S_ISDIR(mode))
 		mode |= S_ISGID;
@@ -1546,9 +1424,9 @@ static int yaffs_symlink(struct inode *dir, struct dentry *dentry,
 {
 	struct yaffs_obj *obj;
 	struct yaffs_dev *dev;
-	uid_t uid = YPROC_uid(current);
+	uid_t uid = YCRED(current)->fsuid;
 	gid_t gid =
-	    (dir->i_mode & S_ISGID) ? EXTRACT_gid(dir->i_gid) : YPROC_gid(current);
+	    (dir->i_mode & S_ISGID) ? dir->i_gid : YCRED(current)->fsgid;
 
 	yaffs_trace(YAFFS_TRACE_OS, "yaffs_symlink");
 
@@ -1586,13 +1464,8 @@ static int yaffs_symlink(struct inode *dir, struct dentry *dentry,
  *
  * NB: POSIX says you can rename an object over an old object of the same name
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0))
-static int yaffs_rename(struct inode *old_dir, struct dentry *old_dentry,
-			struct inode *new_dir, struct dentry *new_dentry, unsigned int unused)
-#else
 static int yaffs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			struct inode *new_dir, struct dentry *new_dentry)
-#endif
 {
 	struct yaffs_dev *dev;
 	int ret_val = YAFFS_FAIL;
@@ -1658,11 +1531,7 @@ static int yaffs_unlink(struct inode *dir, struct dentry *dentry)
 
 	if (ret_val == YAFFS_OK) {
 		inode_dec_link_count(dentry->d_inode);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 16, 0))
-		inode_inc_iversion(dir);
-#else
 		dir->i_version++;
-#endif
 		yaffs_gross_unlock(dev);
 		update_dir_time(dir);
 		return 0;
@@ -1684,12 +1553,10 @@ static const struct inode_operations yaffs_dir_inode_operations = {
 	.mknod = yaffs_mknod,
 	.rename = yaffs_rename,
 	.setattr = yaffs_setattr,
-	.listxattr = yaffs_listxattr,
-#ifdef YAFFS_USE_XATTR
 	.setxattr = yaffs_setxattr,
 	.getxattr = yaffs_getxattr,
+	.listxattr = yaffs_listxattr,
 	.removexattr = yaffs_removexattr,
-#endif
 };
 
 /*-----------------------------------------------------------------*/
@@ -1807,92 +1674,19 @@ static void yaffs_remove_obj_callback(struct yaffs_obj *obj)
 
 /*-----------------------------------------------------------------*/
 
-#ifdef YAFFS_USE_DIR_ITERATE
-static int yaffs_iterate(struct file *f, struct dir_context *dc)
-{
-	struct yaffs_obj *obj;
-	struct yaffs_dev *dev;
-	struct yaffs_search_context *sc;
-	unsigned long curoffs;
-	struct yaffs_obj *l;
-	int ret_val = 0;
-
-	char name[YAFFS_MAX_NAME_LENGTH + 1];
-
-	obj = yaffs_dentry_to_obj(Y_GET_DENTRY(f));
-	dev = obj->my_dev;
-
-	yaffs_gross_lock(dev);
-
-	yaffs_dev_to_lc(dev)->readdir_process = current;
-
-	sc = yaffs_new_search(obj);
-	if (!sc) {
-		ret_val = -ENOMEM;
-		goto out;
-	}
-
-	if (!dir_emit_dots(f, dc)) {
-		yaffs_gross_unlock(dev);
-		return 0;
-	}
-
-	curoffs = 1;
-
-	while (sc->next_return) {
-		curoffs++;
-		l = sc->next_return;
-		if (curoffs >= dc->pos) {
-			int this_inode = yaffs_get_obj_inode(l);
-			int this_type = yaffs_get_obj_type(l);
-
-			yaffs_get_obj_name(l, name, YAFFS_MAX_NAME_LENGTH + 1);
-			yaffs_trace(YAFFS_TRACE_OS,
-				"yaffs_readdir: %s inode %d",
-				name, yaffs_get_obj_inode(l));
-
-			yaffs_gross_unlock(dev);
-
-			if (!dir_emit(dc,
-				      name,
-				      strlen(name),
-				      this_inode,
-				      this_type)) {
-				yaffs_gross_lock(dev);
-				goto out;
-			}
-
-			yaffs_gross_lock(dev);
-
-			dc->pos++;
-			f->f_pos++;
-		}
-		yaffs_search_advance(sc);
-	}
-
-out:
-	yaffs_search_end(sc);
-	yaffs_dev_to_lc(dev)->readdir_process = NULL;
-	yaffs_gross_unlock(dev);
-
-	return ret_val;
-}
-
-#else
-
 static int yaffs_readdir(struct file *f, void *dirent, filldir_t filldir)
 {
 	struct yaffs_obj *obj;
 	struct yaffs_dev *dev;
 	struct yaffs_search_context *sc;
-	struct inode *inode = Y_GET_DENTRY(f)->d_inode;
+	struct inode *inode = f->f_dentry->d_inode;
 	unsigned long offset, curoffs;
 	struct yaffs_obj *l;
 	int ret_val = 0;
 
 	char name[YAFFS_MAX_NAME_LENGTH + 1];
 
-	obj = yaffs_dentry_to_obj(Y_GET_DENTRY(f));
+	obj = yaffs_dentry_to_obj(f->f_dentry);
 	dev = obj->my_dev;
 
 	yaffs_gross_lock(dev);
@@ -1987,15 +1781,9 @@ out:
 	return ret_val;
 }
 
-#endif
-
 static const struct file_operations yaffs_dir_operations = {
 	.read = generic_read_dir,
-#ifdef YAFFS_USE_DIR_ITERATE
-	.iterate = yaffs_iterate,
-#else
 	.readdir = yaffs_readdir,
-#endif
 	.fsync = yaffs_sync_object,
 	.llseek = generic_file_llseek,
 };
@@ -2041,8 +1829,8 @@ static void yaffs_fill_inode_from_obj(struct inode *inode,
 
 		inode->i_ino = obj->obj_id;
 		inode->i_mode = obj->yst_mode;
-		inode->i_uid = MAKE_uid(obj->yst_uid);
-		inode->i_gid = MAKE_gid(obj->yst_gid);
+		inode->i_uid = obj->yst_uid;
+		inode->i_gid = obj->yst_gid;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19))
 		inode->i_blksize = inode->i_sb->s_blocksize;
 #endif
@@ -2068,7 +1856,7 @@ static void yaffs_fill_inode_from_obj(struct inode *inode,
 
 		yaffs_trace(YAFFS_TRACE_OS,
 			"yaffs_fill_inode mode %x uid %d gid %d size %lld count %d",
-			inode->i_mode, obj->yst_uid, obj->yst_gid,
+			inode->i_mode, inode->i_uid, inode->i_gid,
 			inode->i_size, atomic_read(&inode->i_count));
 
 		switch (obj->yst_mode & S_IFMT) {
@@ -2145,26 +1933,10 @@ static unsigned yaffs_bg_gc_urgency(struct yaffs_dev *dev)
 
 #ifdef YAFFS_COMPILE_BACKGROUND
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
-struct timer_struct {
-	struct task_struct *task;
-	struct timer_list timer;
-};
-#endif
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
-static void yaffs_background_waker(struct timer_list *t)
-{
-	struct timer_struct *ts = from_timer(ts, t, timer);
-
-	wake_up_process(ts->task);
-}
-#else
 void yaffs_background_waker(unsigned long data)
 {
 	wake_up_process((struct task_struct *)data);
 }
-#endif
 
 static int yaffs_bg_thread_fn(void *data)
 {
@@ -2177,11 +1949,7 @@ static int yaffs_bg_thread_fn(void *data)
 	unsigned int urgency;
 
 	int gc_result;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
-	struct timer_struct timer;
-#else
 	struct timer_list timer;
-#endif
 
 	yaffs_trace(YAFFS_TRACE_BACKGROUND,
 		"yaffs_background starting for dev %p", (void *)dev);
@@ -2227,32 +1995,24 @@ static int yaffs_bg_thread_fn(void *data)
                         }
 		}
 		yaffs_gross_unlock(dev);
+#if 1
 		expires = next_dir_update;
 		if (time_before(next_gc, expires))
 			expires = next_gc;
 		if (time_before(expires, now))
 			expires = now + HZ;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
-		Y_INIT_TIMER(&timer.timer, yaffs_background_waker);
-		timer.timer.expires = expires + 1;
-		timer.task = current;
-#else
 		Y_INIT_TIMER(&timer);
 		timer.expires = expires + 1;
 		timer.data = (unsigned long)current;
 		timer.function = yaffs_background_waker;
-#endif
 
 		set_current_state(TASK_INTERRUPTIBLE);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
-		add_timer(&timer.timer);
-		schedule();
-		del_timer_sync(&timer.timer);
-#else
 		add_timer(&timer);
 		schedule();
 		del_timer_sync(&timer);
+#else
+		msleep(10);
 #endif
 	}
 
@@ -2320,7 +2080,7 @@ static void yaffs_flush_inodes(struct super_block *sb)
 			yaffs_trace(YAFFS_TRACE_OS,
 				"flushing obj %d",
 				obj->obj_id);
-			yaffs_flush_file(obj, 1, 0, 0);
+			yaffs_flush_file(obj, 1, 0);
 		}
 	}
 }
@@ -2333,7 +2093,7 @@ static void yaffs_flush_super(struct super_block *sb, int do_checkpoint)
 
 	yaffs_flush_inodes(sb);
 	yaffs_update_dirty_dirs(dev);
-	yaffs_flush_whole_cache(dev, 1);
+	yaffs_flush_whole_cache(dev);
 	if (do_checkpoint)
 		yaffs_checkpoint_save(dev);
 }
@@ -2712,45 +2472,7 @@ static int yaffs_sync_fs(struct super_block *sb)
 	return 0;
 }
 
-/* the function only is used to change dev->read_only when this file system
- * is remounted.
- */
-static int yaffs_remount_fs(struct super_block *sb, int *flags, char *data)
-{
-	int read_only = 0;
-	struct mtd_info *mtd;
-	struct yaffs_dev *dev = 0;
 
-	/* Get the device */
-	mtd = get_mtd_device(NULL, MINOR(sb->s_dev));
-	if (!mtd) {
-		yaffs_trace(YAFFS_TRACE_ALWAYS,
-			"MTD device #%u doesn't appear to exist",
-			MINOR(sb->s_dev));
-		return 1;
-	}
-
-	/* Check it's NAND */
-	if (mtd->type != MTD_NANDFLASH) {
-		yaffs_trace(YAFFS_TRACE_ALWAYS,
-			"MTD device is not NAND it's type %d",
-			mtd->type);
-		return 1;
-	}
-
-	read_only = ((*flags & MS_RDONLY) != 0);
-	if (!read_only && !(mtd->flags & MTD_WRITEABLE)) {
-		read_only = 1;
-		printk(KERN_INFO
-			"yaffs: mtd is read only, setting superblock read only");
-		*flags |= MS_RDONLY;
-	}
-
-	dev = sb->s_fs_info;
-	dev->read_only = read_only;
-
-	return 0;
-}
 
 static const struct super_operations yaffs_super_ops = {
 	.statfs = yaffs_statfs,
@@ -2772,7 +2494,6 @@ static const struct super_operations yaffs_super_ops = {
 #ifdef YAFFS_HAS_WRITE_SUPER
 	.write_super = yaffs_write_super,
 #endif
-	.remount_fs = yaffs_remount_fs,
 };
 
 struct yaffs_options {
@@ -2949,7 +2670,7 @@ static struct super_block *yaffs_internal_read_super(int yaffs_version,
 
 	/* Get the device */
 	mtd = get_mtd_device(NULL, MINOR(sb->s_dev));
-	if (IS_ERR(mtd)) {
+	if (!mtd) {
 		yaffs_trace(YAFFS_TRACE_ALWAYS,
 			"yaffs: MTD device %u either not valid or unavailable",
 			MINOR(sb->s_dev));
@@ -2992,11 +2713,15 @@ static struct super_block *yaffs_internal_read_super(int yaffs_version,
 	context = kmalloc(sizeof(struct yaffs_linux_context), GFP_KERNEL);
 
 	if (!dev || !context) {
-		kfree(dev);
-		kfree(context);
+		if (dev)
+			kfree(dev);
+		if (context)
+			kfree(context);
 		dev = NULL;
 		context = NULL;
+	}
 
+	if (!dev) {
 		/* Deep shit could not allocate device structure */
 		yaffs_trace(YAFFS_TRACE_ALWAYS,
 			"yaffs_read_super: Failed trying to allocate struct yaffs_dev."
@@ -3362,7 +3087,7 @@ static char *yaffs_dump_dev_part1(char *buf, struct yaffs_dev *dev)
 	return buf;
 }
 
-static int yaffs_proc_read(char *page,
+static ssize_t yaffs_proc_read(char *page,
 			   char **start,
 			   off_t offset, int count, int *eof, void *data)
 {
@@ -3382,7 +3107,9 @@ static int yaffs_proc_read(char *page,
 	/* Print header first */
 	if (step == 0)
 		buf +=
-		    sprintf(buf, "Multi-version YAFFS\n");
+		    sprintf(buf,
+			    "Multi-version YAFFS built:" __DATE__ " " __TIME__
+			    "\n");
 	else if (step == 1)
 		buf += sprintf(buf, "\n");
 	else {
@@ -3461,7 +3188,7 @@ static struct {
 
 #define MAX_MASK_NAME_LENGTH 40
 static int yaffs_proc_write_trace_options(struct file *file, const char *buf,
-					  unsigned long count)
+					  unsigned long count, void *data)
 {
 	unsigned rg = 0, mask_bitfield;
 	char *end;
@@ -3562,7 +3289,7 @@ static int yaffs_proc_write_trace_options(struct file *file, const char *buf,
  */
 
 static int yaffs_proc_debug_write(struct file *file, const char *buf,
-					  unsigned long count)
+					  unsigned long count, void *data)
 {
 
 	char str[100];
@@ -3574,7 +3301,7 @@ static int yaffs_proc_debug_write(struct file *file, const char *buf,
 	struct list_head *item;
 
 	memset(str, 0, sizeof(str));
-	memcpy(str, buf, min((size_t)count, sizeof(str) -1));
+	memcpy(str, buf, min(count, sizeof(str) -1));
 
 	cmd = str[1];
 
@@ -3637,18 +3364,12 @@ static int yaffs_proc_debug_write(struct file *file, const char *buf,
 	return count;
 }
 
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
-static int yaffs_proc_write(struct file *file, const char *buf,
-			    unsigned long count, void *ppos)
-#else
-static ssize_t yaffs_proc_write(struct file *file, const char __user *buf,
-			    size_t count, loff_t *ppos)
-#endif
+static ssize_t yaffs_proc_write(struct file *file, const char *buf,
+			    unsigned long count, void *data)
 {
 	if (buf[0] == '.')
-		return yaffs_proc_debug_write(file, buf, count);
-	return yaffs_proc_write_trace_options(file, buf, count);
+		return yaffs_proc_debug_write(file, buf, count, data);
+	return yaffs_proc_write_trace_options(file, buf, count, data);
 }
 
 /* Stuff to handle installation of file systems */
@@ -3663,68 +3384,11 @@ static struct file_system_to_install fs_to_install[] = {
 	{NULL, 0}
 };
 
-
-#ifdef YAFFS_NEW_PROCFS
-static int yaffs_proc_show(struct seq_file *m, void *v)
-{
-	/* FIXME: Unify in a better way? */
-	char buffer[512];
-	char *start;
-	int len;
-
-	len = yaffs_proc_read(buffer, &start, 0, sizeof(buffer), NULL, NULL);
-	seq_puts(m, buffer);
-	return 0;
-}
-
-static int yaffs_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, yaffs_proc_show, NULL);
-}
-
-static struct file_operations procfs_ops = {
-	.owner = THIS_MODULE,
-	.open  = yaffs_proc_open,
-	.read  = seq_read,
-	.write = yaffs_proc_write,
+static const struct file_operations yaffs_fops = {
+        .owner	= THIS_MODULE,
+        .read = yaffs_proc_read,
+        .write = yaffs_proc_write,
 };
-
-static int yaffs_procfs_init(void)
-{
-	/* Install the proc_fs entries */
-	my_proc_entry = proc_create("yaffs",
-				    S_IRUGO | S_IFREG,
-				    YPROC_ROOT,
-				    &procfs_ops);
-
-	if (my_proc_entry) {
-		return 0;
-	} else {
-		return -ENOMEM;
-	}
-}
-
-#else
-
-
-static int yaffs_procfs_init(void)
-{
-	/* Install the proc_fs entries */
-	my_proc_entry = create_proc_entry("yaffs",
-					  S_IRUGO | S_IFREG, YPROC_ROOT);
-
-	if (my_proc_entry) {
-		my_proc_entry->write_proc = yaffs_proc_write;
-		my_proc_entry->read_proc = yaffs_proc_read;
-		my_proc_entry->data = NULL;
-		return 0;
-	} else {
-		return -ENOMEM;
-	}
-}
-
-#endif
-
 
 static int __init init_yaffs_fs(void)
 {
@@ -3732,14 +3396,22 @@ static int __init init_yaffs_fs(void)
 	struct file_system_to_install *fsinst;
 
 	yaffs_trace(YAFFS_TRACE_ALWAYS,
-		"yaffs Installing.");
+		"yaffs built " __DATE__ " " __TIME__ " Installing.");
 
 	mutex_init(&yaffs_context_lock);
 
-	error = yaffs_procfs_init();
-	if (error)
-		return error;
-
+	/* Install the proc_fs entries */
+	my_proc_entry = proc_create("yaffs",
+					  S_IRUGO | S_IFREG, YPROC_ROOT, &yaffs_fops);
+#if 0
+	if (my_proc_entry) {
+		my_proc_entry->write_proc = yaffs_proc_write;
+		my_proc_entry->read_proc = yaffs_proc_read;
+		my_proc_entry->data = NULL;
+	} else {
+		return -ENOMEM;
+        }
+#endif
 	/* Now add the file system entries */
 
 	fsinst = fs_to_install;
@@ -3773,7 +3445,7 @@ static void __exit exit_yaffs_fs(void)
 	struct file_system_to_install *fsinst;
 
 	yaffs_trace(YAFFS_TRACE_ALWAYS,
-		"yaffs removing.");
+		"yaffs built " __DATE__ " " __TIME__ " removing.");
 
 	remove_proc_entry("yaffs", YPROC_ROOT);
 
@@ -3789,8 +3461,8 @@ static void __exit exit_yaffs_fs(void)
 }
 
 module_init(init_yaffs_fs)
-module_exit(exit_yaffs_fs)
+    module_exit(exit_yaffs_fs)
 
-MODULE_DESCRIPTION("YAFFS2 - a NAND specific flash file system");
+    MODULE_DESCRIPTION("YAFFS2 - a NAND specific flash file system");
 MODULE_AUTHOR("Charles Manning, Aleph One Ltd., 2002-2011");
 MODULE_LICENSE("GPL");
