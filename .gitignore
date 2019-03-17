@@ -6,6 +6,9 @@
 *.ko
 *.obj
 *.elf
+rootfs/.ash_history
+rootfs/drv/
+rootfs/usr/lib/
 
 # Linker output
 *.ilk
