@@ -1,1 +1,1 @@
-#define CONFIG_PREFIX "./_install"
+#define CONFIG_PREFIX "/home/flinn/smart210-SDK/rootfs"

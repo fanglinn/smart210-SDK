@@ -187,7 +187,7 @@ SUBARCH := $(shell echo $(SUBARCH) | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 					 -e s/s390x/s390/ -e s/parisc64/parisc/ \
 					 -e s/ppc.*/powerpc/ -e s/mips.*/mips/ )
 
-ARCH ?= $(SUBARCH)
+ARCH ?= arm
 
 # Architecture as present in compile.h
 UTS_MACHINE := $(ARCH)
