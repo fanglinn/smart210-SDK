@@ -3,12 +3,15 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/device.h>
+
 
 static int chrdev_major = 0;
 static int chrdev_minor = 0;
-static char *dev_name = "chrdev";
+static char *device_name = "chrdev";
 static dev_t chr_dev;
 static struct cdev *cdev;
+static struct class *chrdev_class;
 
 static int chrdev_open (struct inode *inode, struct file *file)
 {
@@ -37,11 +40,11 @@ static int __init chrdev_init(void)
 	if(chrdev_major)
 	{
 		chr_dev = MKDEV(chrdev_major,chrdev_minor);
-		ret = register_chrdev_region(chr_dev,1,dev_name);
+		ret = register_chrdev_region(chr_dev,1,device_name);
 	}
 	else
 	{
-		ret = alloc_chrdev_region(&chr_dev,0,1,dev_name);
+		ret = alloc_chrdev_region(&chr_dev,0,1,device_name);
 		chrdev_major = MAJOR(chr_dev);
 	}
 	if(ret < 0)
@@ -70,6 +73,9 @@ static int __init chrdev_init(void)
 		return ret;
 	}
 
+	chrdev_class = class_create(THIS_MODULE,"chrdev");
+
+	device_create(chrdev_class,NULL,chr_dev,NULL,"chrdev");
 	
 	return 0;
 }
@@ -78,6 +84,9 @@ static int __init chrdev_init(void)
 static void __exit chrdev_exit(void)
 {
 	printk(KERN_NOTICE "chrdev exit.\n");
+	device_destroy(chrdev_class,chr_dev);
+	class_destroy(chrdev_class);
+	
 	cdev_del(cdev);
 	unregister_chrdev_region(chr_dev,1);
 }
