@@ -57,6 +57,33 @@
 
 #include "common.h"
 
+#include <linux/leds.h>
+
+static struct gpio_led leds[] = 
+{
+	[0] = {
+		.name = "led0",
+		.default_trigger = "heartbeat",
+		.gpio = S5PV210_GPJ2(0),
+		.active_low = 1,
+		.default_state = LEDS_GPIO_DEFSTATE_OFF,
+	},
+};
+
+static struct gpio_led_platform_data smart210_leds_data = {
+	.num_leds = ARRAY_SIZE(leds),
+	.leds = leds,
+};
+
+static struct platform_device smart210_leds = 
+{
+	.name = "leds-gpio",
+	.dev = {
+		.platform_data = &smart210_leds_data,
+	},
+	.id = -1,
+};
+
 /* Following are default values for UCON, ULCON and UFCON UART registers */
 #define SMDKV210_UCON_DEFAULT	(S3C2410_UCON_TXILEVEL |	\
 				 S3C2410_UCON_RXILEVEL |	\
