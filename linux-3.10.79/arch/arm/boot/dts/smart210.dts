@@ -1,0 +1,6 @@
+/dts-v1/;
+
+/{
+	model = "SMART210";
+	compatible = "samsung,smart210";
+};

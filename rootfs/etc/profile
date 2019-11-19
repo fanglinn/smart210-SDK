@@ -1,0 +1,11 @@
+# exc while sign in by usr
+
+#env
+export HOME=/root
+export PS1="[root@smart210 \W]# "
+
+# create device in /dev
+mdev -s
+
+echo "Enjoy It"
+
