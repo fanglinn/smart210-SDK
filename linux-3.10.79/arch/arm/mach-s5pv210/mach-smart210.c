@@ -1,4 +1,4 @@
-/* linux/arch/arm/mach-s5pv210/mach-smdkv210.c
+/* linux/arch/arm/mach-s5pv210/mach-smart210.c
  *
  * Copyright (c) 2010 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com/
@@ -85,55 +85,55 @@ static struct platform_device smart210_leds =
 };
 
 /* Following are default values for UCON, ULCON and UFCON UART registers */
-#define SMDKV210_UCON_DEFAULT	(S3C2410_UCON_TXILEVEL |	\
+#define SMART210_UCON_DEFAULT	(S3C2410_UCON_TXILEVEL |	\
 				 S3C2410_UCON_RXILEVEL |	\
 				 S3C2410_UCON_TXIRQMODE |	\
 				 S3C2410_UCON_RXIRQMODE |	\
 				 S3C2410_UCON_RXFIFO_TOI |	\
 				 S3C2443_UCON_RXERR_IRQEN)
 
-#define SMDKV210_ULCON_DEFAULT	S3C2410_LCON_CS8
+#define SMART210_ULCON_DEFAULT	S3C2410_LCON_CS8
 
-#define SMDKV210_UFCON_DEFAULT	(S3C2410_UFCON_FIFOMODE |	\
+#define SMART210_UFCON_DEFAULT	(S3C2410_UFCON_FIFOMODE |	\
 				 S5PV210_UFCON_TXTRIG4 |	\
 				 S5PV210_UFCON_RXTRIG4)
 
-static struct s3c2410_uartcfg smdkv210_uartcfgs[] __initdata = {
+static struct s3c2410_uartcfg smart210_uartcfgs[] __initdata = {
 	[0] = {
 		.hwport		= 0,
 		.flags		= 0,
-		.ucon		= SMDKV210_UCON_DEFAULT,
-		.ulcon		= SMDKV210_ULCON_DEFAULT,
-		.ufcon		= SMDKV210_UFCON_DEFAULT,
+		.ucon		= SMART210_UCON_DEFAULT,
+		.ulcon		= SMART210_ULCON_DEFAULT,
+		.ufcon		= SMART210_UFCON_DEFAULT,
 	},
 	[1] = {
 		.hwport		= 1,
 		.flags		= 0,
-		.ucon		= SMDKV210_UCON_DEFAULT,
-		.ulcon		= SMDKV210_ULCON_DEFAULT,
-		.ufcon		= SMDKV210_UFCON_DEFAULT,
+		.ucon		= SMART210_UCON_DEFAULT,
+		.ulcon		= SMART210_ULCON_DEFAULT,
+		.ufcon		= SMART210_UFCON_DEFAULT,
 	},
 	[2] = {
 		.hwport		= 2,
 		.flags		= 0,
-		.ucon		= SMDKV210_UCON_DEFAULT,
-		.ulcon		= SMDKV210_ULCON_DEFAULT,
-		.ufcon		= SMDKV210_UFCON_DEFAULT,
+		.ucon		= SMART210_UCON_DEFAULT,
+		.ulcon		= SMART210_ULCON_DEFAULT,
+		.ufcon		= SMART210_UFCON_DEFAULT,
 	},
 	[3] = {
 		.hwport		= 3,
 		.flags		= 0,
-		.ucon		= SMDKV210_UCON_DEFAULT,
-		.ulcon		= SMDKV210_ULCON_DEFAULT,
-		.ufcon		= SMDKV210_UFCON_DEFAULT,
+		.ucon		= SMART210_UCON_DEFAULT,
+		.ulcon		= SMART210_ULCON_DEFAULT,
+		.ufcon		= SMART210_UFCON_DEFAULT,
 	},
 };
 
-static struct s3c_ide_platdata smdkv210_ide_pdata __initdata = {
+static struct s3c_ide_platdata smart210_ide_pdata __initdata = {
 	.setup_gpio	= s5pv210_ide_setup_gpio,
 };
 
-static uint32_t smdkv210_keymap[] __initdata = {
+static uint32_t smart210_keymap[] __initdata = {
 	/* KEY(row, col, keycode) */
 	KEY(0, 3, KEY_1), KEY(0, 4, KEY_2), KEY(0, 5, KEY_3),
 	KEY(0, 6, KEY_4), KEY(0, 7, KEY_5),
@@ -141,42 +141,42 @@ static uint32_t smdkv210_keymap[] __initdata = {
 	KEY(1, 6, KEY_D), KEY(1, 7, KEY_E)
 };
 
-static struct matrix_keymap_data smdkv210_keymap_data __initdata = {
-	.keymap		= smdkv210_keymap,
-	.keymap_size	= ARRAY_SIZE(smdkv210_keymap),
+static struct matrix_keymap_data smart210_keymap_data __initdata = {
+	.keymap		= smart210_keymap,
+	.keymap_size	= ARRAY_SIZE(smart210_keymap),
 };
 
-static struct samsung_keypad_platdata smdkv210_keypad_data __initdata = {
-	.keymap_data	= &smdkv210_keymap_data,
+static struct samsung_keypad_platdata smart210_keypad_data __initdata = {
+	.keymap_data	= &smart210_keymap_data,
 	.rows		= 8,
 	.cols		= 8,
 };
 
-static struct resource smdkv210_dm9000_resources[] = {
+static struct resource smart210_dm9000_resources[] = {
 	[0] = DEFINE_RES_MEM(S5PV210_PA_SROM_BANK1, 4),
 	[1] = DEFINE_RES_MEM(S5PV210_PA_SROM_BANK1 + 4, 4),
 	[2] = DEFINE_RES_NAMED(IRQ_EINT(7), 1, NULL, IORESOURCE_IRQ \
 				| IORESOURCE_IRQ_HIGHLEVEL),
 };
 
-static struct dm9000_plat_data smdkv210_dm9000_platdata = {
+static struct dm9000_plat_data smart210_dm9000_platdata = {
 	.flags		= DM9000_PLATF_16BITONLY | DM9000_PLATF_NO_EEPROM,
 	.dev_addr	= { 0x00, 0x09, 0xc0, 0xff, 0xec, 0x48 },
 };
 
-static struct platform_device smdkv210_dm9000 = {
+static struct platform_device smart210_dm9000 = {
 	.name		= "dm9000",
 	.id		= -1,
-	.num_resources	= ARRAY_SIZE(smdkv210_dm9000_resources),
-	.resource	= smdkv210_dm9000_resources,
+	.num_resources	= ARRAY_SIZE(smart210_dm9000_resources),
+	.resource	= smart210_dm9000_resources,
 	.dev		= {
-		.platform_data	= &smdkv210_dm9000_platdata,
+		.platform_data	= &smart210_dm9000_platdata,
 	},
 };
 
 
 
-static void smdkv210_lte480wv_set_power(struct plat_lcd_data *pd,
+static void smart210_lte480wv_set_power(struct plat_lcd_data *pd,
 					unsigned int power)
 {
 	if (power) {
@@ -203,24 +203,24 @@ static void smdkv210_lte480wv_set_power(struct plat_lcd_data *pd,
 	}
 }
 
-static struct plat_lcd_data smdkv210_lcd_lte480wv_data = {
-	.set_power	= smdkv210_lte480wv_set_power,
+static struct plat_lcd_data smart210_lcd_lte480wv_data = {
+	.set_power	= smart210_lte480wv_set_power,
 };
 
-static struct platform_device smdkv210_lcd_lte480wv = {
+static struct platform_device smart210_lcd_lte480wv = {
 	.name			= "platform-lcd",
 	.dev.parent		= &s3c_device_fb.dev,
-	.dev.platform_data	= &smdkv210_lcd_lte480wv_data,
+	.dev.platform_data	= &smart210_lcd_lte480wv_data,
 };
 
-static struct s3c_fb_pd_win smdkv210_fb_win0 = {
+static struct s3c_fb_pd_win smart210_fb_win0 = {
 	.max_bpp	= 32,
 	.default_bpp	= 24,
 	.xres		= 800,
 	.yres		= 480,
 };
 
-static struct fb_videomode smdkv210_lcd_timing = {
+static struct fb_videomode smart210_lcd_timing = {
 	.left_margin	= 13,
 	.right_margin	= 8,
 	.upper_margin	= 7,
@@ -231,16 +231,16 @@ static struct fb_videomode smdkv210_lcd_timing = {
 	.yres		= 480,
 };
 
-static struct s3c_fb_platdata smdkv210_lcd0_pdata __initdata = {
-	.win[0]		= &smdkv210_fb_win0,
-	.vtiming	= &smdkv210_lcd_timing,
+static struct s3c_fb_platdata smart210_lcd0_pdata __initdata = {
+	.win[0]		= &smart210_fb_win0,
+	.vtiming	= &smart210_lcd_timing,
 	.vidcon0	= VIDCON0_VIDOUT_RGB | VIDCON0_PNRMODE_RGB,
 	.vidcon1	= VIDCON1_INV_HSYNC | VIDCON1_INV_VSYNC,
 	.setup_gpio	= s5pv210_fb_gpio_setup_24bpp,
 };
 
 /* USB OTG */
-static struct s3c_hsotg_plat smdkv210_hsotg_pdata;
+static struct s3c_hsotg_plat smart210_hsotg_pdata;
 
 /* nand info (add by Flinn) */
 static struct mtd_partition smdk_default_nand_part[] = {
@@ -280,7 +280,7 @@ static struct nand_ecclayout nand_oob_64 = {
 				42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
 				52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
 				62, 63},
-	/* 0和1用于保存坏块标记，12~63保存ecc，剩余2~11为free */
+	/* 0�?1用于保存坏块标记�?12~63保存ecc，剩�?2~11为free */
 	.oobfree = {
 			{.offset = 2,
 			.length = 10}
@@ -326,7 +326,7 @@ static void s5pv210_nand_gpio_cfg(void)
 }
 
 
-static struct platform_device *smdkv210_devices[] __initdata = {
+static struct platform_device *smart210_devices[] __initdata = {
 	&s3c_device_adc,
 	&s3c_device_cfcon,
 	&s3c_device_fb,
@@ -354,12 +354,13 @@ static struct platform_device *smdkv210_devices[] __initdata = {
 	&s5pv210_device_spdif,
 	&samsung_asoc_idma,
 	&samsung_device_keypad,
-	&smdkv210_dm9000,
-	&smdkv210_lcd_lte480wv,
-	&s3c_device_nand,	/* add by Flinn */
+	&smart210_dm9000,
+	&smart210_lcd_lte480wv,
+	&s3c_device_nand,	/* add by flinn for nand  */
+	&smart210_leds,     /* add by flinn for heartbeat */
 };
 
-static void __init smdkv210_dm9000_init(void)
+static void __init smart210_dm9000_init(void)
 {
 	unsigned int tmp;
 
@@ -376,84 +377,84 @@ static void __init smdkv210_dm9000_init(void)
 	__raw_writel(tmp, S5P_SROM_BW);
 }
 
-static struct i2c_board_info smdkv210_i2c_devs0[] __initdata = {
+static struct i2c_board_info smart210_i2c_devs0[] __initdata = {
 	{ I2C_BOARD_INFO("24c08", 0x50), },     /* Samsung S524AD0XD1 */
 	{ I2C_BOARD_INFO("wm8580", 0x1b), },
 };
 
-static struct i2c_board_info smdkv210_i2c_devs1[] __initdata = {
+static struct i2c_board_info smart210_i2c_devs1[] __initdata = {
 	/* To Be Updated */
 };
 
-static struct i2c_board_info smdkv210_i2c_devs2[] __initdata = {
+static struct i2c_board_info smart210_i2c_devs2[] __initdata = {
 	/* To Be Updated */
 };
 
 /* LCD Backlight data */
-static struct samsung_bl_gpio_info smdkv210_bl_gpio_info = {
+static struct samsung_bl_gpio_info smart210_bl_gpio_info = {
 	.no = S5PV210_GPD0(3),
 	.func = S3C_GPIO_SFN(2),
 };
 
-static struct platform_pwm_backlight_data smdkv210_bl_data = {
+static struct platform_pwm_backlight_data smart210_bl_data = {
 	.pwm_id = 3,
 	.pwm_period_ns = 1000,
 };
 
-static void __init smdkv210_map_io(void)
+static void __init smart210_map_io(void)
 {
 	s5pv210_init_io(NULL, 0);
 	s3c24xx_init_clocks(clk_xusbxti.rate);
-	s3c24xx_init_uarts(smdkv210_uartcfgs, ARRAY_SIZE(smdkv210_uartcfgs));
+	s3c24xx_init_uarts(smart210_uartcfgs, ARRAY_SIZE(smart210_uartcfgs));
 	samsung_set_timer_source(SAMSUNG_PWM2, SAMSUNG_PWM4);
 }
 
-static void __init smdkv210_reserve(void)
+static void __init smart210_reserve(void)
 {
 	s5p_mfc_reserve_mem(0x43000000, 8 << 20, 0x51000000, 8 << 20);
 }
 
-static void __init smdkv210_machine_init(void)
+static void __init smart210_machine_init(void)
 {
 	s3c_pm_init();
 
-	smdkv210_dm9000_init();
+	smart210_dm9000_init();
 	/* add by Flinn */
 	s3c_nand_setname("s5pv210-nand");
 	s3c_nand_set_platdata(&smdk_nand_info);
 	s5pv210_nand_gpio_cfg();
 
-	samsung_keypad_set_platdata(&smdkv210_keypad_data);
+	samsung_keypad_set_platdata(&smart210_keypad_data);
 	s3c24xx_ts_set_platdata(NULL);
 
 	s3c_i2c0_set_platdata(NULL);
 	s3c_i2c1_set_platdata(NULL);
 	s3c_i2c2_set_platdata(NULL);
-	i2c_register_board_info(0, smdkv210_i2c_devs0,
-			ARRAY_SIZE(smdkv210_i2c_devs0));
-	i2c_register_board_info(1, smdkv210_i2c_devs1,
-			ARRAY_SIZE(smdkv210_i2c_devs1));
-	i2c_register_board_info(2, smdkv210_i2c_devs2,
-			ARRAY_SIZE(smdkv210_i2c_devs2));
+	i2c_register_board_info(0, smart210_i2c_devs0,
+			ARRAY_SIZE(smart210_i2c_devs0));
+	i2c_register_board_info(1, smart210_i2c_devs1,
+			ARRAY_SIZE(smart210_i2c_devs1));
+	i2c_register_board_info(2, smart210_i2c_devs2,
+			ARRAY_SIZE(smart210_i2c_devs2));
 
-	s3c_ide_set_platdata(&smdkv210_ide_pdata);
+	s3c_ide_set_platdata(&smart210_ide_pdata);
 
-	s3c_fb_set_platdata(&smdkv210_lcd0_pdata);
+	s3c_fb_set_platdata(&smart210_lcd0_pdata);
 
-	samsung_bl_set(&smdkv210_bl_gpio_info, &smdkv210_bl_data);
+	samsung_bl_set(&smart210_bl_gpio_info, &smart210_bl_data);
 
-	s3c_hsotg_set_platdata(&smdkv210_hsotg_pdata);
+	s3c_hsotg_set_platdata(&smart210_hsotg_pdata);
 
-	platform_add_devices(smdkv210_devices, ARRAY_SIZE(smdkv210_devices));
+	platform_add_devices(smart210_devices, ARRAY_SIZE(smart210_devices));
 }
 
 MACHINE_START(SMART210, "SMART210")
 	/* Maintainer: Kukjin Kim <kgene.kim@samsung.com> */
 	.atag_offset	= 0x100,
 	.init_irq	= s5pv210_init_irq,
-	.map_io		= smdkv210_map_io,
-	.init_machine	= smdkv210_machine_init,
+	.map_io		= smart210_map_io,
+	.init_machine	= smart210_machine_init,
 	.init_time	= samsung_timer_init,
 	.restart	= s5pv210_restart,
-	.reserve	= &smdkv210_reserve,
+	.reserve	= &smart210_reserve,
 MACHINE_END

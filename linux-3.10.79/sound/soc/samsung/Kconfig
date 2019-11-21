@@ -60,6 +60,15 @@ config SND_SOC_SAMSUNG_SMDK_WM8580
 	help
 	  Say Y if you want to add support for SoC audio on the SMDKs.
 
+config SND_SOC_SMART210
+	tristate "SoC I2S Audio support for wm8960 on smart210"
+	depends on SND_SOC_SAMSUNG && MACH_SMART210
+	select SND_SOC_WM8960
+	select SND_SAMSUNG_I2S
+	help
+	  Say Y if you want to add support for SoC audio on the smart210.
+
+
 config SND_SOC_SAMSUNG_SMDK_WM8994
 	tristate "SoC I2S Audio support for WM8994 on SMDK"
 	depends on SND_SOC_SAMSUNG
