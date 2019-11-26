@@ -853,6 +853,8 @@ static int soc_bind_dai_link(struct snd_soc_card *card, int num)
 			if (codec->dev->of_node != dai_link->codec_of_node)
 				continue;
 		} else {
+			dev_info(card->dev, "registered codec : %s <-> current codec : %s \n",
+				codec->name, dai_link->codec_name);
 			if (strcmp(codec->name, dai_link->codec_name))
 				continue;
 		}
@@ -897,6 +899,8 @@ static int soc_bind_dai_link(struct snd_soc_card *card, int num)
 			    dai_link->platform_of_node)
 				continue;
 		} else {
+			pr_info("registered platfom : %s <-> current platform : %s \n",
+				platform->name, platform_name);
 			if (strcmp(platform->name, platform_name))
 				continue;
 		}
